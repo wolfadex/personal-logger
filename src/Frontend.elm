@@ -366,7 +366,7 @@ view : Model -> Browser.Document FrontendMsg
 view model =
     { title = "Personal Logger"
     , body =
-        [ Html.main_ []
+        [ Html.main_ [ Css.theme_2 ]
             [ Html.h1 [] [ Html.text "Personal Logger" ]
             , case model.logs of
                 Unloaded ->
