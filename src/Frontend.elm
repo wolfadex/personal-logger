@@ -366,7 +366,7 @@ view : Model -> Browser.Document FrontendMsg
 view model =
     { title = "Personal Logger"
     , body =
-        [ Html.div [ Html.Attributes.style "text-align" "center", Html.Attributes.style "padding-top" "40px" ]
+        [ Html.main_ []
             [ Html.h1 [] [ Html.text "Personal Logger" ]
             , case model.logs of
                 Unloaded ->
@@ -374,13 +374,13 @@ view model =
                         [ Html.text "Load logs" ]
 
                 Loading Nothing ->
-                    Html.text "Loading logs..."
+                    Html.div [ Css.loader ] []
 
                 Loading (Just logs) ->
-                    viewLogs model logs
+                    viewLogs model True logs
 
                 Loaded logs ->
-                    viewLogs model logs
+                    viewLogs model False logs
 
                 Failure _ err ->
                     Html.text err
@@ -417,8 +417,8 @@ view model =
     }
 
 
-viewLogs : Model -> LoadedLogs -> Html FrontendMsg
-viewLogs model ( logs, unloadedLogs ) =
+viewLogs : Model -> Bool -> LoadedLogs -> Html FrontendMsg
+viewLogs model isLoading ( logs, unloadedLogs ) =
     let
         newLog =
             case model.newLog of
@@ -462,24 +462,34 @@ viewLogs model ( logs, unloadedLogs ) =
                 ]
                 [ Html.text "Load older logs" ]
             )
+
+        loadingLogs =
+            ( "log-loading-status"
+            , if isLoading then
+                Html.div [ Css.loader ] []
+
+              else
+                Html.text ""
+            )
     in
     Html.Keyed.node "div" [ Css.logList ] <|
         case ( logs, unloadedLogs ) of
             ( [], [] ) ->
-                [ ( "new-log-form", newLogForm ) ]
+                [ ( "new-log-form", newLogForm ), loadingLogs ]
 
             ( [], _ ) ->
-                [ loadMoreButton ]
+                [ loadingLogs, loadMoreButton ]
 
             ( _, [] ) ->
                 logs
                     |> List.map viewLog
+                    |> (\l -> l ++ [ loadingLogs ])
                     |> (::) ( "new-log-form", newLogForm )
 
             _ ->
                 logs
                     |> List.map viewLog
-                    |> (\l -> l ++ [ loadMoreButton ])
+                    |> (\l -> l ++ [ loadingLogs, loadMoreButton ])
                     |> (::) ( "new-log-form", newLogForm )
 
 
