@@ -2,6 +2,7 @@ module Frontend exposing (..)
 
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
+import Css
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -257,31 +258,33 @@ view model =
                     Html.text err
             ]
         , Html.h2 [] [ Html.text "Settings" ]
-        , Html.label []
-            [ Html.text "Owner"
-            , Html.input
-                [ Html.Attributes.value model.owner ]
-                []
-            ]
-        , Html.br [] []
-        , Html.label []
-            [ Html.text "Repo"
-            , Html.input
-                [ Html.Attributes.value model.repo ]
-                []
-            ]
-        , Html.br [] []
-        , Html.label []
-            [ Html.text "Token"
-            , Html.input
-                [ Html.Attributes.value model.githubToken
-                , Html.Attributes.type_ "password"
+        , Html.form [ Html.Events.onSubmit LoadLogs ]
+            [ Html.label []
+                [ Html.text "Owner"
+                , Html.input
+                    [ Html.Attributes.value model.owner ]
+                    []
                 ]
-                []
+            , Html.br [] []
+            , Html.label []
+                [ Html.text "Repo"
+                , Html.input
+                    [ Html.Attributes.value model.repo ]
+                    []
+                ]
+            , Html.br [] []
+            , Html.label []
+                [ Html.text "Token"
+                , Html.input
+                    [ Html.Attributes.value model.githubToken
+                    , Html.Attributes.type_ "password"
+                    ]
+                    []
+                ]
+            , Html.br [] []
+            , Html.button [ Html.Attributes.type_ "submit" ]
+                [ Html.text "Load logs" ]
             ]
-        , Html.br [] []
-        , Html.button [ Html.Events.onClick LoadLogs ]
-            [ Html.text "Load logs" ]
         ]
     }
 
@@ -320,7 +323,7 @@ viewLogs model ( logs, unloadedLogs ) =
                     ]
                 , Html.button
                     [ Html.Attributes.type_ "submit" ]
-                    [ Html.text "Submit log" ]
+                    [ Html.text "Log entry" ]
                 ]
 
         loadMoreButton =
@@ -329,7 +332,7 @@ viewLogs model ( logs, unloadedLogs ) =
                 [ Html.text "Load older logs" ]
             )
     in
-    Html.Keyed.node "div" [] <|
+    Html.Keyed.node "div" [ Css.logList ] <|
         case ( logs, unloadedLogs ) of
             ( [], [] ) ->
                 [ ( "new-log-form", newLogForm ) ]
@@ -352,18 +355,18 @@ viewLogs model ( logs, unloadedLogs ) =
 viewLog : ( Time.Posix, NonEmptyList Log ) -> ( String, Html FrontendMsg )
 viewLog ( createdAt, ( log, _ ) ) =
     ( createdAt |> Time.posixToMillis |> String.fromInt
-    , Html.form []
-        [ Html.label []
-            [ Html.text "Title"
-            , Html.input
+    , Html.form [ Css.previousLogTitle ]
+        [ Html.label [ Css.previousLogTitle ]
+            [ Html.input
                 [ Html.Attributes.value log.title
+                , Html.Attributes.placeholder "Title"
                 ]
                 []
             ]
-        , Html.label []
-            [ Html.text "Content"
-            , Html.textarea
+        , Html.label [ Css.previousLogContent ]
+            [ Html.textarea
                 [ Html.Attributes.value log.content
+                , Html.Attributes.placeholder "Content"
                 ]
                 []
             ]
