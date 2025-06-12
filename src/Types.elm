@@ -81,6 +81,7 @@ type FrontendMsg
     | UserClickedSettingsOpen
     | UserClickedSettingsClose
     | SetTheme Theme
+    | LocalStorageKeyReceived ( String, Maybe String )
 
 
 type ToBackend

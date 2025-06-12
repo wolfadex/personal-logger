@@ -10,6 +10,8 @@ import Html.Keyed
 import Json.Decode
 import Json.Encode
 import Lamdera
+import LocalStorage
+import PkgPorts
 import Time
 import Types exposing (..)
 import Url
@@ -22,7 +24,7 @@ app =
         , onUrlChange = UrlChanged
         , update = update
         , updateFromBackend = updateFromBackend
-        , subscriptions = \m -> Sub.none
+        , subscriptions = subscriptions
         , view = view
         }
 
@@ -38,8 +40,13 @@ init url key =
       , settingsOpen = False
       , theme = NoTheme
       }
-    , Cmd.none
+    , LocalStorage.get PkgPorts.ports "theme"
     )
+
+
+subscriptions : FrontendModel -> Sub FrontendMsg
+subscriptions _ =
+    LocalStorage.gotten PkgPorts.ports LocalStorageKeyReceived
 
 
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
@@ -63,6 +70,43 @@ update msg model =
         NoOpFrontendMsg ->
             ( model, Cmd.none )
 
+        LocalStorageKeyReceived ( "theme", Nothing ) ->
+            ( model, Cmd.none )
+
+        LocalStorageKeyReceived ( "theme", Just value ) ->
+            ( { model
+                | theme =
+                    case value of
+                        "none" ->
+                            NoTheme
+
+                        "1" ->
+                            Theme_1
+
+                        "2" ->
+                            Theme_2
+
+                        "3" ->
+                            Theme_3
+
+                        "4" ->
+                            Theme_4
+
+                        "5" ->
+                            Theme_5
+
+                        "6" ->
+                            Theme_6
+
+                        _ ->
+                            model.theme
+              }
+            , Cmd.none
+            )
+
+        LocalStorageKeyReceived ( key, value ) ->
+            ( model, Cmd.none )
+
         UserClickedSettingsOpen ->
             ( { model | settingsOpen = True }, Cmd.none )
 
@@ -70,7 +114,30 @@ update msg model =
             ( { model | settingsOpen = False }, Cmd.none )
 
         SetTheme theme ->
-            ( { model | theme = theme }, Cmd.none )
+            ( { model | theme = theme }
+            , LocalStorage.set PkgPorts.ports "theme" <|
+                case theme of
+                    NoTheme ->
+                        "none"
+
+                    Theme_1 ->
+                        "1"
+
+                    Theme_2 ->
+                        "2"
+
+                    Theme_3 ->
+                        "3"
+
+                    Theme_4 ->
+                        "4"
+
+                    Theme_5 ->
+                        "5"
+
+                    Theme_6 ->
+                        "6"
+            )
 
         LoadLogs ->
             ( { model | logs = Loading Nothing }
