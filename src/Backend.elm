@@ -45,6 +45,14 @@ update msg model =
                 |> Lamdera.sendToFrontend sessionId
             )
 
+        MoreLogsLoadResponse sessionId response ->
+            ( model
+            , response
+                |> Result.mapError Debug.toString
+                |> TF_MoreLogsLoaded
+                |> Lamdera.sendToFrontend sessionId
+            )
+
         CreateNewLog sessionId details isFirstLog log now ->
             ( model
             , githubRequest
@@ -229,6 +237,62 @@ updateFromFrontend sessionId clientId msg model =
             ( model
             , Time.now
                 |> Task.perform (CreateNewLog sessionId details isFirstLog log)
+            )
+
+        TB_LoadMoreLogs details toLoad ->
+            ( model
+            , toLoad
+                |> List.map
+                    (\( name, downloadUrl ) ->
+                        Http.task
+                            { method = "GET"
+                            , headers =
+                                [ Http.header "Accept" "application/vnd.github.object+json"
+                                , Http.header "Authorization" ("Bearer " ++ details.token)
+                                , Http.header "X-GitHub-Api-Version" "2022-11-28"
+                                ]
+                            , url =
+                                let
+                                    proxy =
+                                        case Env.mode of
+                                            Env.Development ->
+                                                "http://localhost:8001/"
+
+                                            Env.Production ->
+                                                ""
+                                in
+                                proxy ++ downloadUrl
+                            , body = Http.emptyBody
+                            , resolver =
+                                Http.stringResolver
+                                    -- (LogsLoadResponse sessionId)
+                                    (\response ->
+                                        case response of
+                                            Http.BadUrl_ url ->
+                                                Err (Http.BadUrl url)
+
+                                            Http.Timeout_ ->
+                                                Err Http.Timeout
+
+                                            Http.NetworkError_ ->
+                                                Err Http.NetworkError
+
+                                            Http.BadStatus_ metadata _ ->
+                                                Err (Http.BadStatus metadata.statusCode)
+
+                                            Http.GoodStatus_ _ body ->
+                                                case Json.Decode.decodeString decodeLog body of
+                                                    Ok value ->
+                                                        Ok ( name, value )
+
+                                                    Err err ->
+                                                        Err (Http.BadBody (Json.Decode.errorToString err))
+                                    )
+                            , timeout = Nothing
+                            }
+                    )
+                |> Task.sequence
+                |> Task.attempt (MoreLogsLoadResponse sessionId)
             )
 
 

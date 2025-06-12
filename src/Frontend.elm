@@ -167,6 +167,49 @@ update msg model =
             , Cmd.none
             )
 
+        LoadMoreLogs ->
+            ( { model
+                | logs =
+                    case model.logs of
+                        Unloaded ->
+                            Loading Nothing
+
+                        Loaded logs ->
+                            Loading (Just logs)
+
+                        Loading _ ->
+                            model.logs
+
+                        Failure loaded _ ->
+                            Loading loaded
+              }
+            , case model.logs of
+                Unloaded ->
+                    toStorageDetails model
+                        |> TB_LoadLogs
+                        |> Lamdera.sendToBackend
+
+                Loaded ( _, unloaded ) ->
+                    unloaded
+                        |> List.take 5
+                        |> TB_LoadMoreLogs (toStorageDetails model)
+                        |> Lamdera.sendToBackend
+
+                Loading _ ->
+                    Cmd.none
+
+                Failure Nothing _ ->
+                    toStorageDetails model
+                        |> TB_LoadLogs
+                        |> Lamdera.sendToBackend
+
+                Failure (Just ( _, unloaded )) _ ->
+                    unloaded
+                        |> List.take 5
+                        |> TB_LoadMoreLogs (toStorageDetails model)
+                        |> Lamdera.sendToBackend
+            )
+
 
 toStorageDetails : Model -> StorageDetails
 toStorageDetails model =
@@ -187,7 +230,63 @@ updateFromBackend msg model =
                             Loaded logs
 
                         Err err ->
-                            Failure err
+                            case model.logs of
+                                Unloaded ->
+                                    Failure Nothing err
+
+                                Loading logs ->
+                                    Failure logs err
+
+                                Loaded logs ->
+                                    Failure (Just logs) err
+
+                                Failure logs _ ->
+                                    Failure logs err
+              }
+            , Cmd.none
+            )
+
+        TF_MoreLogsLoaded response ->
+            ( { model
+                | logs =
+                    case response of
+                        Ok newLogs ->
+                            case model.logs of
+                                Unloaded ->
+                                    Loaded ( newLogs, [] )
+
+                                Loading Nothing ->
+                                    Loaded ( newLogs, [] )
+
+                                Loading (Just logs) ->
+                                    newLogs
+                                        |> List.foldl upsertLog logs
+                                        |> Loaded
+
+                                Loaded logs ->
+                                    Loaded logs
+
+                                Failure Nothing _ ->
+                                    Loaded ( newLogs, [] )
+
+                                Failure (Just logs) _ ->
+                                    newLogs
+                                        |> List.foldl upsertLog logs
+                                        |> Loaded
+
+                        Err err ->
+                            case model.logs of
+                                Unloaded ->
+                                    Failure Nothing err
+
+                                Loading logs ->
+                                    Failure logs err
+
+                                Loaded logs ->
+                                    Failure (Just logs) err
+
+                                Failure logs _ ->
+                                    Failure logs err
               }
             , Cmd.none
             )
@@ -206,6 +305,35 @@ updateFromBackend msg model =
               }
             , Cmd.none
             )
+
+
+upsertLog : ( Time.Posix, NonEmptyList Log ) -> LoadedLogs -> LoadedLogs
+upsertLog (( newLogDate, _ ) as newLog) ( logs, unloadedLogs ) =
+    ( case logs of
+        [] ->
+            [ newLog ]
+
+        recentLog :: rest ->
+            upsetLogHelper newLog [] recentLog rest
+    , List.filter (\( unloadedDate, _ ) -> unloadedDate == newLogDate) unloadedLogs
+    )
+
+
+upsetLogHelper : ( Time.Posix, NonEmptyList Log ) -> List ( Time.Posix, NonEmptyList Log ) -> ( Time.Posix, NonEmptyList Log ) -> List ( Time.Posix, NonEmptyList Log ) -> List ( Time.Posix, NonEmptyList Log )
+upsetLogHelper (( newLogDate, _ ) as newLog) checkedLogs ( recentLogTime, recentLog ) toCheckLogs =
+    if Time.posixToMillis newLogDate == Time.posixToMillis recentLogTime then
+        List.reverse checkedLogs ++ newLog :: toCheckLogs
+
+    else if Time.posixToMillis newLogDate > Time.posixToMillis recentLogTime then
+        List.reverse checkedLogs ++ newLog :: ( recentLogTime, recentLog ) :: toCheckLogs
+
+    else
+        case toCheckLogs of
+            [] ->
+                List.reverse checkedLogs ++ [ ( recentLogTime, recentLog ), newLog ]
+
+            nextMostRecent :: rest ->
+                upsetLogHelper newLog (( recentLogTime, recentLog ) :: checkedLogs) nextMostRecent rest
 
 
 insertLog : Log -> LoadedLogs -> LoadedLogs
@@ -254,7 +382,7 @@ view model =
                 Loaded logs ->
                     viewLogs model logs
 
-                Failure err ->
+                Failure _ err ->
                     Html.text err
             ]
         , Html.h2 [] [ Html.text "Settings" ]
@@ -328,7 +456,10 @@ viewLogs model ( logs, unloadedLogs ) =
 
         loadMoreButton =
             ( "load-more-button"
-            , Html.button []
+            , Html.button
+                [ Html.Attributes.type_ "button"
+                , Html.Events.onClick LoadMoreLogs
+                ]
                 [ Html.text "Load older logs" ]
             )
     in

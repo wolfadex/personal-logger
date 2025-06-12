@@ -28,7 +28,7 @@ type LogResult
     = Unloaded
     | Loading (Maybe LoadedLogs)
     | Loaded LoadedLogs
-    | Failure String
+    | Failure (Maybe LoadedLogs) String
 
 
 type NewLog
@@ -63,12 +63,14 @@ type FrontendMsg
     | NewLogContentChanged String
     | ExistingLogTitleChanged Time.Posix String
     | ExistingLogContentChanged Time.Posix String
+    | LoadMoreLogs
 
 
 type ToBackend
     = NoOpToBackend
     | TB_LoadLogs StorageDetails
     | TB_CreateNewLog StorageDetails Bool { title : String, content : String }
+    | TB_LoadMoreLogs StorageDetails (List ( Time.Posix, String ))
 
 
 type alias StorageDetails =
@@ -81,6 +83,7 @@ type alias StorageDetails =
 type BackendMsg
     = NoOpBackendMsg
     | LogsLoadResponse Lamdera.SessionId (Result Http.Error LoadedLogs)
+    | MoreLogsLoadResponse Lamdera.SessionId (Result Http.Error (List ( Time.Posix, NonEmptyList Log )))
     | CreateNewLog Lamdera.SessionId StorageDetails Bool { title : String, content : String } Time.Posix
     | LogCreated Lamdera.SessionId Log (Result Http.Error ())
 
@@ -88,4 +91,5 @@ type BackendMsg
 type ToFrontend
     = NoOpToFrontend
     | TF_LogsLoaded (Result String LoadedLogs)
+    | TF_MoreLogsLoaded (Result String (List ( Time.Posix, NonEmptyList Log )))
     | TF_InsertLog Log
