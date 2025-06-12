@@ -15,10 +15,6 @@ import Types exposing (..)
 import Url
 
 
-type alias Model =
-    FrontendModel
-
-
 app =
     Lamdera.frontend
         { init = init
@@ -31,7 +27,7 @@ app =
         }
 
 
-init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
+init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
     ( { key = key
       , logs = Unloaded
@@ -39,12 +35,14 @@ init url key =
       , owner = ""
       , repo = ""
       , githubToken = ""
+      , settingsOpen = False
+      , theme = NoTheme
       }
     , Cmd.none
     )
 
 
-update : FrontendMsg -> Model -> ( Model, Cmd FrontendMsg )
+update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 update msg model =
     case msg of
         UrlClicked urlRequest ->
@@ -70,6 +68,9 @@ update msg model =
 
         UserClickedSettingsClose ->
             ( { model | settingsOpen = False }, Cmd.none )
+
+        SetTheme theme ->
+            ( { model | theme = theme }, Cmd.none )
 
         LoadLogs ->
             ( { model | logs = Loading Nothing }
@@ -219,12 +220,12 @@ update msg model =
             )
 
 
-toStorageDetails : Model -> StorageDetails
+toStorageDetails : FrontendModel -> StorageDetails
 toStorageDetails model =
     { owner = model.owner, repo = model.repo, token = model.githubToken }
 
 
-updateFromBackend : ToFrontend -> Model -> ( Model, Cmd FrontendMsg )
+updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
     case msg of
         NoOpToFrontend ->
@@ -370,11 +371,33 @@ insertLogHelper newLog checkedLogs ( recentLogTime, recentLog ) toCheckLogs =
                 insertLogHelper newLog (( recentLogTime, recentLog ) :: checkedLogs) nextMostRecent rest
 
 
-view : Model -> Browser.Document FrontendMsg
+view : FrontendModel -> Browser.Document FrontendMsg
 view model =
     { title = "Personal Logger"
     , body =
-        [ Html.main_ [ Css.theme_2 ]
+        [ Html.main_
+            [ case model.theme of
+                NoTheme ->
+                    Html.Attributes.class ""
+
+                Theme_1 ->
+                    Css.theme_1
+
+                Theme_2 ->
+                    Css.theme_2
+
+                Theme_3 ->
+                    Css.theme_3
+
+                Theme_4 ->
+                    Css.theme_4
+
+                Theme_5 ->
+                    Css.theme_5
+
+                Theme_6 ->
+                    Css.theme_6
+            ]
             [ Html.h1 [] [ Html.text "Personal Logger" ]
             , case model.logs of
                 Unloaded ->
@@ -398,47 +421,118 @@ view model =
             , Html.Events.onClick UserClickedSettingsOpen
             ]
             [ Html.text "Settings" ]
-        , modal { isOpen = model.settingsOpen, onClose = UserClickedSettingsClose }
-            []
-            [ Html.h2 []
-                [ Html.text "Settings"
-                , Html.button
-                    [ Html.Attributes.attribute "aria-label" "Close"
-                    , Html.Attributes.rel "prev"
-                    , Html.Events.onClick UserClickedSettingsClose
-                    ]
-                    [ Html.text "Close" ]
+        , viewSettings model
+        ]
+    }
+
+
+viewSettings : FrontendModel -> Html FrontendMsg
+viewSettings model =
+    modal { isOpen = model.settingsOpen, onClose = UserClickedSettingsClose }
+        []
+        [ Html.h2 []
+            [ Html.text "Settings"
+            , Html.button
+                [ Html.Attributes.attribute "aria-label" "Close"
+                , Html.Attributes.rel "prev"
+                , Html.Events.onClick UserClickedSettingsClose
                 ]
-            , Html.form [ Html.Events.onSubmit LoadLogs ]
-                [ Html.label []
-                    [ Html.text "Owner"
+                [ Html.text "Close" ]
+            ]
+        , Html.form [ Html.Events.onSubmit LoadLogs ]
+            [ Html.label []
+                [ Html.text "Owner"
+                , Html.input
+                    [ Html.Attributes.value model.owner ]
+                    []
+                ]
+            , Html.label []
+                [ Html.text "Repo"
+                , Html.input
+                    [ Html.Attributes.value model.repo ]
+                    []
+                ]
+            , Html.label []
+                [ Html.text "Token"
+                , Html.input
+                    [ Html.Attributes.value model.githubToken
+                    , Html.Attributes.type_ "password"
+                    ]
+                    []
+                ]
+            , Html.fieldset []
+                [ Html.legend []
+                    [ Html.text "Theme"
+                    ]
+                , Html.label []
+                    [ Html.span [] [ Html.text "No theme" ]
                     , Html.input
-                        [ Html.Attributes.value model.owner ]
+                        [ Html.Attributes.type_ "radio"
+                        , Html.Attributes.name "theme"
+                        , Html.Events.onInput (\_ -> SetTheme NoTheme)
+                        ]
                         []
                     ]
-                , Html.br [] []
                 , Html.label []
-                    [ Html.text "Repo"
+                    [ Html.span [] [ Html.text "Cubes" ]
                     , Html.input
-                        [ Html.Attributes.value model.repo ]
+                        [ Html.Attributes.type_ "radio"
+                        , Html.Attributes.name "theme"
+                        , Html.Events.onInput (\_ -> SetTheme Theme_1)
+                        ]
                         []
                     ]
-                , Html.br [] []
                 , Html.label []
-                    [ Html.text "Token"
+                    [ Html.span [] [ Html.text "Grid" ]
                     , Html.input
-                        [ Html.Attributes.value model.githubToken
-                        , Html.Attributes.type_ "password"
+                        [ Html.Attributes.type_ "radio"
+                        , Html.Attributes.name "theme"
+                        , Html.Events.onInput (\_ -> SetTheme Theme_2)
+                        ]
+                        []
+                    ]
+                , Html.label []
+                    [ Html.span [] [ Html.text "Dots dark" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "radio"
+                        , Html.Attributes.name "theme"
+                        , Html.Events.onInput (\_ -> SetTheme Theme_3)
+                        ]
+                        []
+                    ]
+                , Html.label []
+                    [ Html.span [] [ Html.text "Dots light" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "radio"
+                        , Html.Attributes.name "theme"
+                        , Html.Events.onInput (\_ -> SetTheme Theme_4)
+                        ]
+                        []
+                    ]
+                , Html.label []
+                    [ Html.span [] [ Html.text "Notebook" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "radio"
+                        , Html.Attributes.name "theme"
+                        , Html.Events.onInput (\_ -> SetTheme Theme_5)
+                        ]
+                        []
+                    ]
+                , Html.label []
+                    [ Html.span [] [ Html.text "Lines" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "radio"
+                        , Html.Attributes.name "theme"
+                        , Html.Events.onInput (\_ -> SetTheme Theme_6)
                         ]
                         []
                     ]
                 ]
             ]
         ]
-    }
 
 
-viewLogs : Model -> Bool -> LoadedLogs -> Html FrontendMsg
+viewLogs : FrontendModel -> Bool -> LoadedLogs -> Html FrontendMsg
 viewLogs model isLoading ( logs, unloadedLogs ) =
     let
         newLog =

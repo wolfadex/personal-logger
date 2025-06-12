@@ -10,13 +10,26 @@ import Url exposing (Url)
 
 type alias FrontendModel =
     { key : Key
+    , newLog : NewLog
     , logs : LogResult
+
+    -- Settings
+    , settingsOpen : Bool
     , owner : String
     , repo : String
     , githubToken : String
-    , newLog : NewLog
-    , settingsOpen : Bool
+    , theme : Theme
     }
+
+
+type Theme
+    = NoTheme
+    | Theme_1
+    | Theme_2
+    | Theme_3
+    | Theme_4
+    | Theme_5
+    | Theme_6
 
 
 type alias LoadedLogs =
@@ -67,6 +80,7 @@ type FrontendMsg
     | LoadMoreLogs
     | UserClickedSettingsOpen
     | UserClickedSettingsClose
+    | SetTheme Theme
 
 
 type ToBackend
