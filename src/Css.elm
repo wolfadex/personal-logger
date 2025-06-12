@@ -1,4 +1,4 @@
-module Css exposing (logList, previousLogTitle, previousLogContent, loader, theme_1, theme_2, theme_3, theme_4, theme_5, theme_6)
+module Css exposing (logList, previousLogTitle, previousLogContent, settingsButton, loader, theme_1, theme_2, theme_3, theme_4, theme_5, theme_6)
 
 import Html
 import Html.Attributes
@@ -17,6 +17,11 @@ previousLogTitle =
 previousLogContent : Html.Attribute msg
 previousLogContent =
     Html.Attributes.class "previousLogContent"
+
+
+settingsButton : Html.Attribute msg
+settingsButton =
+    Html.Attributes.class "settingsButton"
 
 
 loader : Html.Attribute msg

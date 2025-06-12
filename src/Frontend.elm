@@ -7,6 +7,8 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Html.Keyed
+import Json.Decode
+import Json.Encode
 import Lamdera
 import Time
 import Types exposing (..)
@@ -62,6 +64,12 @@ update msg model =
 
         NoOpFrontendMsg ->
             ( model, Cmd.none )
+
+        UserClickedSettingsOpen ->
+            ( { model | settingsOpen = True }, Cmd.none )
+
+        UserClickedSettingsClose ->
+            ( { model | settingsOpen = False }, Cmd.none )
 
         LoadLogs ->
             ( { model | logs = Loading Nothing }
@@ -385,33 +393,46 @@ view model =
                 Failure _ err ->
                     Html.text err
             ]
-        , Html.h2 [] [ Html.text "Settings" ]
-        , Html.form [ Html.Events.onSubmit LoadLogs ]
-            [ Html.label []
-                [ Html.text "Owner"
-                , Html.input
-                    [ Html.Attributes.value model.owner ]
-                    []
-                ]
-            , Html.br [] []
-            , Html.label []
-                [ Html.text "Repo"
-                , Html.input
-                    [ Html.Attributes.value model.repo ]
-                    []
-                ]
-            , Html.br [] []
-            , Html.label []
-                [ Html.text "Token"
-                , Html.input
-                    [ Html.Attributes.value model.githubToken
-                    , Html.Attributes.type_ "password"
+        , Html.button
+            [ Css.settingsButton
+            , Html.Events.onClick UserClickedSettingsOpen
+            ]
+            [ Html.text "Settings" ]
+        , modal { isOpen = model.settingsOpen, onClose = UserClickedSettingsClose }
+            []
+            [ Html.h2 []
+                [ Html.text "Settings"
+                , Html.button
+                    [ Html.Attributes.attribute "aria-label" "Close"
+                    , Html.Attributes.rel "prev"
+                    , Html.Events.onClick UserClickedSettingsClose
                     ]
-                    []
+                    [ Html.text "Close" ]
                 ]
-            , Html.br [] []
-            , Html.button [ Html.Attributes.type_ "submit" ]
-                [ Html.text "Load logs" ]
+            , Html.form [ Html.Events.onSubmit LoadLogs ]
+                [ Html.label []
+                    [ Html.text "Owner"
+                    , Html.input
+                        [ Html.Attributes.value model.owner ]
+                        []
+                    ]
+                , Html.br [] []
+                , Html.label []
+                    [ Html.text "Repo"
+                    , Html.input
+                        [ Html.Attributes.value model.repo ]
+                        []
+                    ]
+                , Html.br [] []
+                , Html.label []
+                    [ Html.text "Token"
+                    , Html.input
+                        [ Html.Attributes.value model.githubToken
+                        , Html.Attributes.type_ "password"
+                        ]
+                        []
+                    ]
+                ]
             ]
         ]
     }
@@ -513,3 +534,17 @@ viewLog ( createdAt, ( log, _ ) ) =
             ]
         ]
     )
+
+
+modal : { isOpen : Bool, onClose : msg } -> List (Html.Attribute msg) -> List (Html msg) -> Html msg
+modal options attributes =
+    Html.node "dialog"
+        (Html.Attributes.property "___wolfadex_modal__open" (Json.Encode.bool (Debug.log "isOpen" options.isOpen))
+            :: Html.Events.on "close" (Json.Decode.succeed options.onClose)
+            -- :: (if options.isOpen then
+            --         Html.Attributes.attribute "open" ""
+            --     else
+            --         Html.Attributes.class ""
+            --    )
+            :: attributes
+        )

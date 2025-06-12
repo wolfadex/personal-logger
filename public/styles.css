@@ -16,6 +16,7 @@ main {
     flex-direction: column;
     align-items: center;
     padding-top: 40px;
+    min-height: 100vh;
 }
 
 form {
@@ -148,6 +149,12 @@ textarea:hover {
     max-width: unset;
     background-color: unset;
     box-shadow: none;
+}
+
+.settingsButton {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
 }
 
 /* From Uiverse.io by Shoh2008 */

@@ -15,6 +15,7 @@ type alias FrontendModel =
     , repo : String
     , githubToken : String
     , newLog : NewLog
+    , settingsOpen : Bool
     }
 
 
@@ -64,6 +65,8 @@ type FrontendMsg
     | ExistingLogTitleChanged Time.Posix String
     | ExistingLogContentChanged Time.Posix String
     | LoadMoreLogs
+    | UserClickedSettingsOpen
+    | UserClickedSettingsClose
 
 
 type ToBackend

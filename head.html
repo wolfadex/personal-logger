@@ -1,1 +1,19 @@
 <link rel="stylesheet" href="styles.css" />
+
+<script>
+    Object.defineProperty(
+        HTMLDialogElement.prototype,
+        "___wolfadex_modal__open",
+
+        {
+            set(isOpen) {
+                console.log("carl", isOpen);
+                if (isOpen) {
+                    this.showModal();
+                } else {
+                    this.close(this.getAttribute("returnValue"));
+                }
+            },
+        },
+    );
+</script>
