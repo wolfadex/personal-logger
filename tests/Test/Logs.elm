@@ -1,8 +1,7 @@
 module Test.Logs exposing (..)
 
-import Expect exposing (Expectation)
+import Expect
 import Frontend
-import Fuzz exposing (Fuzzer)
 import Test exposing (..)
 import Time
 import Types exposing (..)
