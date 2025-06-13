@@ -132,6 +132,11 @@ textarea:hover {
     outline: 1px solid lightgrey;
 }
 
+.inputError {
+    color: red;
+    grid-column: 1 / 3;
+}
+
 .logList {
     display: flex;
     flex-direction: column;
@@ -222,6 +227,14 @@ textarea:hover {
 
     30% {
         transform: translate(1em, -2em) rotate(40deg);
+    }
+
+    45% {
+        transform: translate(2em, -3em) rotate(137deg);
+    }
+
+    50% {
+        transform: translate(2em, -3em) rotate(135deg);
     }
 
     45% {

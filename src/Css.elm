@@ -1,7 +1,12 @@
-module Css exposing (logList, previousLogTitle, previousLogContent, settingsButton, loader, theme_1, theme_2, theme_3, theme_4, theme_5, theme_6)
+module Css exposing (inputError, logList, previousLogTitle, previousLogContent, settingsButton, loader, theme_1, theme_2, theme_3, theme_4, theme_5, theme_6)
 
 import Html
 import Html.Attributes
+
+
+inputError : Html.Attribute msg
+inputError =
+    Html.Attributes.class "inputError"
 
 
 logList : Html.Attribute msg

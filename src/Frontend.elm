@@ -34,13 +34,17 @@ init url key =
     ( { key = key
       , logs = Unloaded
       , newLog = Fresh { title = "", content = "" }
-      , owner = ""
-      , repo = ""
-      , githubToken = ""
+      , owner = Untouched ""
+      , repo = Untouched ""
+      , token = Untouched ""
       , settingsOpen = False
       , theme = NoTheme
       }
-    , LocalStorage.get PkgPorts.ports "theme"
+    , Cmd.batch
+        [ LocalStorage.get PkgPorts.ports "theme"
+        , LocalStorage.get PkgPorts.ports "owner"
+        , LocalStorage.get PkgPorts.ports "repo"
+        ]
     )
 
 
@@ -65,9 +69,6 @@ update msg model =
                     )
 
         UrlChanged url ->
-            ( model, Cmd.none )
-
-        NoOpFrontendMsg ->
             ( model, Cmd.none )
 
         LocalStorageKeyReceived ( "theme", Nothing ) ->
@@ -104,7 +105,25 @@ update msg model =
             , Cmd.none
             )
 
-        LocalStorageKeyReceived ( key, value ) ->
+        LocalStorageKeyReceived ( "owner", Nothing ) ->
+            ( model, Cmd.none )
+
+        LocalStorageKeyReceived ( "owner", Just "" ) ->
+            ( model, Cmd.none )
+
+        LocalStorageKeyReceived ( "owner", Just owner ) ->
+            ( { model | owner = Committed owner (Ok owner) }, Cmd.none )
+
+        LocalStorageKeyReceived ( "repo", Nothing ) ->
+            ( model, Cmd.none )
+
+        LocalStorageKeyReceived ( "repo", Just "" ) ->
+            ( model, Cmd.none )
+
+        LocalStorageKeyReceived ( "repo", Just repo ) ->
+            ( { model | repo = Committed repo (Ok repo) }, Cmd.none )
+
+        LocalStorageKeyReceived _ ->
             ( model, Cmd.none )
 
         UserClickedSettingsOpen ->
@@ -139,9 +158,87 @@ update msg model =
                         "6"
             )
 
+        OwnerChanged owner ->
+            ( { model | owner = Editing owner }, Cmd.none )
+
+        OwnerBlurred ->
+            let
+                nextOwner =
+                    commitField
+                        (\owner ->
+                            if String.isEmpty owner then
+                                Err "Owner is required"
+
+                            else
+                                Ok owner
+                        )
+                        model.owner
+            in
+            ( { model
+                | owner = nextOwner
+              }
+            , case nextOwner of
+                Committed _ (Ok owner) ->
+                    LocalStorage.set PkgPorts.ports "owner" owner
+
+                _ ->
+                    Cmd.none
+            )
+
+        RepoChanged repo ->
+            ( { model | repo = Editing repo }, Cmd.none )
+
+        RepoBlurred ->
+            let
+                nextRepo =
+                    commitField
+                        (\repo ->
+                            if String.isEmpty repo then
+                                Err "Repo is required"
+
+                            else
+                                Ok repo
+                        )
+                        model.repo
+            in
+            ( { model
+                | repo = nextRepo
+              }
+            , case nextRepo of
+                Committed _ (Ok repo) ->
+                    LocalStorage.set PkgPorts.ports "repo" repo
+
+                _ ->
+                    Cmd.none
+            )
+
+        TokenChanged token ->
+            ( { model | token = Editing token }, Cmd.none )
+
+        TokenBlurred ->
+            ( { model
+                | token =
+                    commitField
+                        (\token ->
+                            if String.isEmpty token then
+                                Err "Token is required"
+
+                            else
+                                Ok token
+                        )
+                        model.token
+              }
+            , Cmd.none
+            )
+
         LoadLogs ->
             ( { model | logs = Loading Nothing }
-            , Lamdera.sendToBackend (TB_LoadLogs (toStorageDetails model))
+            , case toStorageDetails model of
+                Just storageDetails ->
+                    Lamdera.sendToBackend (TB_LoadLogs storageDetails)
+
+                Nothing ->
+                    Cmd.none
             )
 
         CreateLog ->
@@ -154,11 +251,14 @@ update msg model =
                         | newLog =
                             Submitting newLog
                       }
-                    , Lamdera.sendToBackend
-                        (TB_CreateNewLog (toStorageDetails model)
-                            (model.logs == Loaded ( [], [] ))
+                    , case toStorageDetails model of
+                        Just storageDetails ->
                             { title = newLog.title, content = newLog.content }
-                        )
+                                |> TB_CreateNewLog storageDetails (model.logs == Loaded ( [], [] ))
+                                |> Lamdera.sendToBackend
+
+                        Nothing ->
+                            Cmd.none
                     )
 
                 Issue newLog _ ->
@@ -166,11 +266,14 @@ update msg model =
                         | newLog =
                             Submitting newLog
                       }
-                    , Lamdera.sendToBackend
-                        (TB_CreateNewLog (toStorageDetails model)
-                            (model.logs == Loaded ( [], [] ))
+                    , case toStorageDetails model of
+                        Just storageDetails ->
                             { title = newLog.title, content = newLog.content }
-                        )
+                                |> TB_CreateNewLog storageDetails (model.logs == Loaded ( [], [] ))
+                                |> Lamdera.sendToBackend
+
+                        Nothing ->
+                            Cmd.none
                     )
 
         NewLogTitleChanged title ->
@@ -261,43 +364,111 @@ update msg model =
               }
             , case model.logs of
                 Unloaded ->
-                    toStorageDetails model
-                        |> TB_LoadLogs
-                        |> Lamdera.sendToBackend
+                    case toStorageDetails model of
+                        Just storageDetails ->
+                            storageDetails
+                                |> TB_LoadLogs
+                                |> Lamdera.sendToBackend
+
+                        Nothing ->
+                            Cmd.none
 
                 Loaded ( _, unloaded ) ->
-                    unloaded
-                        |> List.take 5
-                        |> TB_LoadMoreLogs (toStorageDetails model)
-                        |> Lamdera.sendToBackend
+                    case toStorageDetails model of
+                        Just storageDetails ->
+                            unloaded
+                                |> List.take 5
+                                |> TB_LoadMoreLogs storageDetails
+                                |> Lamdera.sendToBackend
+
+                        Nothing ->
+                            Cmd.none
 
                 Loading _ ->
                     Cmd.none
 
                 Failure Nothing _ ->
-                    toStorageDetails model
-                        |> TB_LoadLogs
-                        |> Lamdera.sendToBackend
+                    case toStorageDetails model of
+                        Just storageDetails ->
+                            storageDetails
+                                |> TB_LoadLogs
+                                |> Lamdera.sendToBackend
+
+                        Nothing ->
+                            Cmd.none
 
                 Failure (Just ( _, unloaded )) _ ->
-                    unloaded
-                        |> List.take 5
-                        |> TB_LoadMoreLogs (toStorageDetails model)
-                        |> Lamdera.sendToBackend
+                    case toStorageDetails model of
+                        Just storageDetails ->
+                            unloaded
+                                |> List.take 5
+                                |> TB_LoadMoreLogs storageDetails
+                                |> Lamdera.sendToBackend
+
+                        Nothing ->
+                            Cmd.none
             )
 
 
-toStorageDetails : FrontendModel -> StorageDetails
+commitField : (raw -> Result String parsed) -> Field raw parsed -> Field raw parsed
+commitField parse field =
+    case field of
+        Untouched raw ->
+            Committed raw (parse raw)
+
+        Editing raw ->
+            Committed raw (parse raw)
+
+        Committed raw _ ->
+            Committed raw (parse raw)
+
+
+fieldRaw : Field raw parsed -> raw
+fieldRaw field =
+    case field of
+        Untouched raw ->
+            raw
+
+        Editing raw ->
+            raw
+
+        Committed raw _ ->
+            raw
+
+
+fieldError : Field raw parsed -> Maybe String
+fieldError field =
+    case field of
+        Untouched _ ->
+            Nothing
+
+        Editing _ ->
+            Nothing
+
+        Committed _ (Ok _) ->
+            Nothing
+
+        Committed _ (Err err) ->
+            Just err
+
+
+toStorageDetails : FrontendModel -> Maybe StorageDetails
 toStorageDetails model =
-    { owner = model.owner, repo = model.repo, token = model.githubToken }
+    case ( model.owner, model.repo, model.token ) of
+        ( Committed _ (Ok owner), Committed _ (Ok repo), Committed _ (Ok token) ) ->
+            Just
+                { owner = owner
+                , repo = repo
+                , token = token
+                }
+
+        _ ->
+            Nothing
 
 
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
     case msg of
-        NoOpToFrontend ->
-            ( model, Cmd.none )
-
         TF_LogsLoaded response ->
             ( { model
                 | logs =
@@ -472,7 +643,7 @@ view model =
                         [ Html.text "Load logs" ]
 
                 Loading Nothing ->
-                    Html.div [ Css.loader ] []
+                    loader
 
                 Loading (Just logs) ->
                     viewLogs model True logs
@@ -510,22 +681,48 @@ viewSettings model =
             [ Html.label []
                 [ Html.text "Owner"
                 , Html.input
-                    [ Html.Attributes.value model.owner ]
+                    [ Html.Attributes.value <| fieldRaw model.owner
+                    , Html.Events.onInput OwnerChanged
+                    , Html.Events.onBlur OwnerBlurred
+                    ]
                     []
+                , case fieldError model.owner of
+                    Nothing ->
+                        Html.text ""
+
+                    Just error ->
+                        Html.span [ Css.inputError ] [ Html.text error ]
                 ]
             , Html.label []
                 [ Html.text "Repo"
                 , Html.input
-                    [ Html.Attributes.value model.repo ]
+                    [ Html.Attributes.value <| fieldRaw model.repo
+                    , Html.Events.onInput RepoChanged
+                    , Html.Events.onBlur RepoBlurred
+                    ]
                     []
+                , case fieldError model.repo of
+                    Nothing ->
+                        Html.text ""
+
+                    Just error ->
+                        Html.span [ Css.inputError ] [ Html.text error ]
                 ]
             , Html.label []
                 [ Html.text "Token"
                 , Html.input
-                    [ Html.Attributes.value model.githubToken
-                    , Html.Attributes.type_ "password"
+                    [ Html.Attributes.type_ "password"
+                    , Html.Attributes.value <| fieldRaw model.token
+                    , Html.Events.onInput TokenChanged
+                    , Html.Events.onBlur TokenBlurred
                     ]
                     []
+                , case fieldError model.token of
+                    Nothing ->
+                        Html.text ""
+
+                    Just error ->
+                        Html.span [ Css.inputError ] [ Html.text error ]
                 ]
             , Html.fieldset []
                 [ Html.legend []
@@ -648,7 +845,7 @@ viewLogs model isLoading ( logs, unloadedLogs ) =
         loadingLogs =
             ( "log-loading-status"
             , if isLoading then
-                Html.div [ Css.loader ] []
+                loader
 
               else
                 Html.text ""
@@ -673,6 +870,11 @@ viewLogs model isLoading ( logs, unloadedLogs ) =
                     |> List.map viewLog
                     |> (\l -> l ++ [ loadingLogs, loadMoreButton ])
                     |> (::) ( "new-log-form", newLogForm )
+
+
+loader : Html msg
+loader =
+    Html.div [ Css.loader ] []
 
 
 viewLog : ( Time.Posix, NonEmptyList Log ) -> ( String, Html FrontendMsg )

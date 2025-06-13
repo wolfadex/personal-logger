@@ -15,9 +15,9 @@ type alias FrontendModel =
 
     -- Settings
     , settingsOpen : Bool
-    , owner : String
-    , repo : String
-    , githubToken : String
+    , owner : Field String String
+    , repo : Field String String
+    , token : Field String String
     , theme : Theme
     }
 
@@ -51,6 +51,12 @@ type NewLog
     | Issue { title : String, content : String } String
 
 
+type Field raw parsed
+    = Untouched raw
+    | Editing raw
+    | Committed raw (Result String parsed)
+
+
 type alias NonEmptyList a =
     ( a, List a )
 
@@ -70,9 +76,14 @@ type alias BackendModel =
 type FrontendMsg
     = UrlClicked UrlRequest
     | UrlChanged Url
-    | NoOpFrontendMsg
     | LoadLogs
     | CreateLog
+    | OwnerChanged String
+    | OwnerBlurred
+    | RepoChanged String
+    | RepoBlurred
+    | TokenChanged String
+    | TokenBlurred
     | NewLogTitleChanged String
     | NewLogContentChanged String
     | ExistingLogTitleChanged Time.Posix String
@@ -85,8 +96,7 @@ type FrontendMsg
 
 
 type ToBackend
-    = NoOpToBackend
-    | TB_LoadLogs StorageDetails
+    = TB_LoadLogs StorageDetails
     | TB_CreateNewLog StorageDetails Bool { title : String, content : String }
     | TB_LoadMoreLogs StorageDetails (List ( Time.Posix, String ))
 
@@ -99,15 +109,13 @@ type alias StorageDetails =
 
 
 type BackendMsg
-    = NoOpBackendMsg
-    | LogsLoadResponse Lamdera.SessionId (Result Http.Error LoadedLogs)
+    = LogsLoadResponse Lamdera.SessionId (Result Http.Error LoadedLogs)
     | MoreLogsLoadResponse Lamdera.SessionId (Result Http.Error (List ( Time.Posix, NonEmptyList Log )))
     | CreateNewLog Lamdera.SessionId StorageDetails Bool { title : String, content : String } Time.Posix
     | LogCreated Lamdera.SessionId Log (Result Http.Error ())
 
 
 type ToFrontend
-    = NoOpToFrontend
-    | TF_LogsLoaded (Result String LoadedLogs)
+    = TF_LogsLoaded (Result String LoadedLogs)
     | TF_MoreLogsLoaded (Result String (List ( Time.Posix, NonEmptyList Log )))
     | TF_InsertLog Log

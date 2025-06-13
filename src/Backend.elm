@@ -30,9 +30,6 @@ init =
 update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 update msg model =
     case msg of
-        NoOpBackendMsg ->
-            ( model, Cmd.none )
-
         LogsLoadResponse sessionId response ->
             ( model
             , response
@@ -96,9 +93,6 @@ update msg model =
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
     case msg of
-        NoOpToBackend ->
-            ( model, Cmd.none )
-
         TB_LoadLogs details ->
             ( model
             , githubRequestTask
