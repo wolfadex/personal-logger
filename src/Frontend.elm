@@ -30,7 +30,7 @@ app =
 
 
 init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
-init url key =
+init _ key =
     ( { key = key
       , logs = Unloaded
       , newLog = Fresh { title = "", content = "" }
@@ -689,7 +689,11 @@ updateFromBackend msg model =
             )
 
         TF_InsertLog _ (Err err) ->
-            Debug.todo ""
+            ( { model
+                | newLog = submittableWithError err model.newLog
+              }
+            , Cmd.none
+            )
 
         TF_InsertLog newLog (Ok sha) ->
             ( { model
@@ -1041,6 +1045,12 @@ viewLogs model isLoading ( logs, unloadedLogs ) =
                         ]
                         []
                     ]
+                , case model.newLog of
+                    Issue _ error ->
+                        Html.span [ Css.inputError ] [ Html.text error ]
+
+                    _ ->
+                        Html.text ""
                 , Html.button
                     [ Html.Attributes.type_ "submit" ]
                     [ Html.text "Log entry" ]

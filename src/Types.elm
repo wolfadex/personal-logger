@@ -84,6 +84,19 @@ toSubmittable submittable =
             Submitting a
 
 
+submittableWithError : String -> Submittable a -> Submittable a
+submittableWithError err submittable =
+    case submittable of
+        Fresh a ->
+            Issue a err
+
+        Submitting a ->
+            Issue a err
+
+        Issue a _ ->
+            Issue a err
+
+
 type Modifiable
     = Unmodified String
     | Modified { original : String, modified : String }
