@@ -239,7 +239,7 @@ update msg model =
                     )
 
                 Nothing ->
-                    ( model
+                    ( { model | settingsOpen = True }
                     , Cmd.none
                     )
 
@@ -249,34 +249,38 @@ update msg model =
                     ( model, Cmd.none )
 
                 Fresh newLog ->
-                    ( { model
-                        | newLog =
-                            Submitting newLog
-                      }
-                    , case toStorageDetails model of
+                    case toStorageDetails model of
                         Just storageDetails ->
-                            { title = newLog.title, content = newLog.content }
+                            ( { model
+                                | newLog =
+                                    Submitting newLog
+                              }
+                            , { title = newLog.title, content = newLog.content }
                                 |> TB_CreateNewLog storageDetails (model.logs == Loaded ( [], [] ))
                                 |> Lamdera.sendToBackend
+                            )
 
                         Nothing ->
-                            Cmd.none
-                    )
+                            ( { model | settingsOpen = True }
+                            , Cmd.none
+                            )
 
                 Issue newLog _ ->
-                    ( { model
-                        | newLog =
-                            Submitting newLog
-                      }
-                    , case toStorageDetails model of
+                    case toStorageDetails model of
                         Just storageDetails ->
-                            { title = newLog.title, content = newLog.content }
+                            ( { model
+                                | newLog =
+                                    Submitting newLog
+                              }
+                            , { title = newLog.title, content = newLog.content }
                                 |> TB_CreateNewLog storageDetails (model.logs == Loaded ( [], [] ))
                                 |> Lamdera.sendToBackend
+                            )
 
                         Nothing ->
-                            Cmd.none
-                    )
+                            ( { model | settingsOpen = True }
+                            , Cmd.none
+                            )
 
         NewLogTitleChanged title ->
             case model.newLog of
@@ -449,7 +453,7 @@ update msg model =
                         Just ( loadedLogsSubmitting, logToChange ) ->
                             case toStorageDetails model of
                                 Nothing ->
-                                    ( model, Cmd.none )
+                                    ( { model | settingsOpen = True }, Cmd.none )
 
                                 Just storageDetails ->
                                     ( { model | logs = toModelLogs ( loadedLogsSubmitting, unloadedLogs ) }
@@ -492,6 +496,13 @@ update msg model =
 
                         Failure loaded _ ->
                             Loading loaded
+                , settingsOpen =
+                    case toStorageDetails model of
+                        Just _ ->
+                            model.settingsOpen
+
+                        Nothing ->
+                            True
               }
             , case model.logs of
                 Unloaded ->
