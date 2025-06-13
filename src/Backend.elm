@@ -80,7 +80,7 @@ update msg model =
                 , expect =
                     Http.expectJson
                         (LogCreated sessionId { date = now, title = log.title, content = log.content })
-                        (Json.Decode.field "sha" Json.Decode.string)
+                        (Json.Decode.at [ "content", "sha" ] Json.Decode.string)
                 }
             )
 
