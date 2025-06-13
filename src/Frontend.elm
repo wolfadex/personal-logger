@@ -68,7 +68,7 @@ update msg model =
                     , Nav.load url
                     )
 
-        UrlChanged url ->
+        UrlChanged _ ->
             ( model, Cmd.none )
 
         LocalStorageKeyReceived ( "theme", Nothing ) ->
@@ -232,14 +232,16 @@ update msg model =
             )
 
         LoadLogs ->
-            ( { model | logs = Loading Nothing }
-            , case toStorageDetails model of
+            case toStorageDetails model of
                 Just storageDetails ->
-                    Lamdera.sendToBackend (TB_LoadLogs storageDetails)
+                    ( { model | logs = Loading Nothing }
+                    , Lamdera.sendToBackend (TB_LoadLogs storageDetails)
+                    )
 
                 Nothing ->
-                    Cmd.none
-            )
+                    ( model
+                    , Cmd.none
+                    )
 
         CreateLog ->
             case model.newLog of
@@ -305,12 +307,57 @@ update msg model =
                         Loaded ( logs, unloadedLogs ) ->
                             Loaded
                                 ( List.map
-                                    (\( t, ( log, rest ) ) ->
-                                        if t == timestamp then
-                                            ( t, ( { log | title = title }, rest ) )
+                                    (\log ->
+                                        if log.timestamp == timestamp then
+                                            { log
+                                                | currentLog =
+                                                    case log.currentLog of
+                                                        Submitting _ ->
+                                                            log.currentLog
+
+                                                        Fresh l ->
+                                                            Fresh
+                                                                { l
+                                                                    | title =
+                                                                        case l.title of
+                                                                            Unmodified title_ ->
+                                                                                if title_ == title then
+                                                                                    l.title
+
+                                                                                else
+                                                                                    Modified { original = title_, modified = title }
+
+                                                                            Modified modified ->
+                                                                                if modified.original == title then
+                                                                                    Unmodified modified.original
+
+                                                                                else
+                                                                                    Modified { modified | modified = title }
+                                                                }
+
+                                                        Issue l _ ->
+                                                            Fresh
+                                                                { l
+                                                                    | title =
+                                                                        case l.title of
+                                                                            Unmodified title_ ->
+                                                                                if title_ == title then
+                                                                                    l.title
+
+                                                                                else
+                                                                                    Modified { original = title_, modified = title }
+
+                                                                            Modified modified ->
+                                                                                if modified.original == title then
+                                                                                    Unmodified modified.original
+
+                                                                                else
+                                                                                    Modified { modified | modified = title }
+                                                                }
+                                            }
 
                                         else
-                                            ( t, ( log, rest ) )
+                                            log
                                     )
                                     logs
                                 , unloadedLogs
@@ -329,12 +376,57 @@ update msg model =
                         Loaded ( logs, unloadedLogs ) ->
                             Loaded
                                 ( List.map
-                                    (\( t, ( log, rest ) ) ->
-                                        if t == timestamp then
-                                            ( t, ( { log | content = content }, rest ) )
+                                    (\log ->
+                                        if log.timestamp == timestamp then
+                                            { log
+                                                | currentLog =
+                                                    case log.currentLog of
+                                                        Submitting _ ->
+                                                            log.currentLog
+
+                                                        Fresh l ->
+                                                            Fresh
+                                                                { l
+                                                                    | content =
+                                                                        case l.content of
+                                                                            Unmodified content_ ->
+                                                                                if content_ == content then
+                                                                                    l.content
+
+                                                                                else
+                                                                                    Modified { original = content_, modified = content }
+
+                                                                            Modified modified ->
+                                                                                if modified.original == content then
+                                                                                    Unmodified modified.original
+
+                                                                                else
+                                                                                    Modified { modified | modified = content }
+                                                                }
+
+                                                        Issue l _ ->
+                                                            Fresh
+                                                                { l
+                                                                    | content =
+                                                                        case l.content of
+                                                                            Unmodified content_ ->
+                                                                                if content_ == content then
+                                                                                    l.content
+
+                                                                                else
+                                                                                    Modified { original = content_, modified = content }
+
+                                                                            Modified modified ->
+                                                                                if modified.original == content then
+                                                                                    Unmodified modified.original
+
+                                                                                else
+                                                                                    Modified { modified | modified = content }
+                                                                }
+                                            }
 
                                         else
-                                            ( t, ( log, rest ) )
+                                            log
                                     )
                                     logs
                                 , unloadedLogs
@@ -345,6 +437,45 @@ update msg model =
               }
             , Cmd.none
             )
+
+        SubmitExistingChange timestamp ->
+            let
+                submitChanges : (( List EditableLogList, b ) -> LogResult) -> ( List EditableLogList, b ) -> ( FrontendModel, Cmd frontendMsg )
+                submitChanges toModelLogs ( loadedLogs, unloadedLogs ) =
+                    case findLogToStore timestamp loadedLogs of
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                        Just ( loadedLogsSubmitting, logToChange ) ->
+                            case toStorageDetails model of
+                                Nothing ->
+                                    ( model, Cmd.none )
+
+                                Just storageDetails ->
+                                    ( { model | logs = toModelLogs ( loadedLogsSubmitting, unloadedLogs ) }
+                                    , logToChange
+                                        |> TB_SubmitExistingChange storageDetails
+                                        |> Lamdera.sendToBackend
+                                    )
+            in
+            case model.logs of
+                Unloaded ->
+                    ( model, Cmd.none )
+
+                Loaded logs ->
+                    submitChanges Loaded logs
+
+                Loading Nothing ->
+                    ( model, Cmd.none )
+
+                Loading (Just logs) ->
+                    submitChanges (\l -> Loading (Just l)) logs
+
+                Failure Nothing _ ->
+                    ( model, Cmd.none )
+
+                Failure (Just logs) err ->
+                    submitChanges (\l -> Failure (Just l) err) logs
 
         LoadMoreLogs ->
             ( { model
@@ -408,6 +539,25 @@ update msg model =
                         Nothing ->
                             Cmd.none
             )
+
+
+findLogToStore : Time.Posix -> List EditableLogList -> Maybe ( List EditableLogList, EditableLogList )
+findLogToStore timestamp logs =
+    findLogToStoreHelper timestamp [] logs
+
+
+findLogToStoreHelper : Time.Posix -> List EditableLogList -> List EditableLogList -> Maybe ( List EditableLogList, EditableLogList )
+findLogToStoreHelper timestamp searchedLogs logs =
+    case logs of
+        [] ->
+            Nothing
+
+        log :: rest ->
+            if timestamp == log.timestamp then
+                Just ( List.reverse searchedLogs ++ { log | currentLog = toSubmittable log.currentLog } :: rest, log )
+
+            else
+                findLogToStore timestamp rest
 
 
 commitField : (raw -> Result String parsed) -> Field raw parsed -> Field raw parsed
@@ -538,14 +688,63 @@ updateFromBackend msg model =
             , Cmd.none
             )
 
-        TF_InsertLog newLog ->
+        TF_InsertLog _ (Err err) ->
+            Debug.todo ""
+
+        TF_InsertLog newLog (Ok sha) ->
             ( { model
                 | newLog = Fresh { title = "", content = "" }
                 , logs =
                     case model.logs of
                         Loaded logs ->
-                            insertLog newLog logs
+                            insertLog sha newLog logs
                                 |> Loaded
+
+                        Failure (Just logs) err ->
+                            Failure (Just (insertLog sha newLog logs)) err
+
+                        Loading (Just logs) ->
+                            Loading (Just (insertLog sha newLog logs))
+
+                        _ ->
+                            model.logs
+              }
+            , Cmd.none
+            )
+
+        TF_LogUpdated log (Err _) ->
+            ( { model
+                | logs =
+                    case model.logs of
+                        Loaded logs ->
+                            upsertLog log logs
+                                |> Loaded
+
+                        Failure (Just logs) err ->
+                            Failure (Just (upsertLog log logs)) err
+
+                        Loading (Just logs) ->
+                            Loading (Just (upsertLog log logs))
+
+                        _ ->
+                            model.logs
+              }
+            , Cmd.none
+            )
+
+        TF_LogUpdated log (Ok ()) ->
+            ( { model
+                | logs =
+                    case model.logs of
+                        Loaded logs ->
+                            upsertLog log logs
+                                |> Loaded
+
+                        Failure (Just logs) err ->
+                            Failure (Just (upsertLog log logs)) err
+
+                        Loading (Just logs) ->
+                            Loading (Just (upsertLog log logs))
 
                         _ ->
                             model.logs
@@ -554,59 +753,73 @@ updateFromBackend msg model =
             )
 
 
-upsertLog : ( Time.Posix, NonEmptyList Log ) -> LoadedLogs -> LoadedLogs
-upsertLog (( newLogDate, _ ) as newLog) ( logs, unloadedLogs ) =
+upsertLog : EditableLogList -> LoadedLogs -> LoadedLogs
+upsertLog newLog ( logs, unloadedLogs ) =
     ( case logs of
         [] ->
             [ newLog ]
 
         recentLog :: rest ->
             upsetLogHelper newLog [] recentLog rest
-    , List.filter (\( unloadedDate, _ ) -> unloadedDate == newLogDate) unloadedLogs
+    , List.filter (\unloaded -> unloaded.timestamp == newLog.timestamp) unloadedLogs
     )
 
 
-upsetLogHelper : ( Time.Posix, NonEmptyList Log ) -> List ( Time.Posix, NonEmptyList Log ) -> ( Time.Posix, NonEmptyList Log ) -> List ( Time.Posix, NonEmptyList Log ) -> List ( Time.Posix, NonEmptyList Log )
-upsetLogHelper (( newLogDate, _ ) as newLog) checkedLogs ( recentLogTime, recentLog ) toCheckLogs =
-    if Time.posixToMillis newLogDate == Time.posixToMillis recentLogTime then
+upsetLogHelper : EditableLogList -> List EditableLogList -> EditableLogList -> List EditableLogList -> List EditableLogList
+upsetLogHelper newLog checkedLogs recentLog toCheckLogs =
+    if Time.posixToMillis newLog.timestamp == Time.posixToMillis recentLog.timestamp then
         List.reverse checkedLogs ++ newLog :: toCheckLogs
 
-    else if Time.posixToMillis newLogDate > Time.posixToMillis recentLogTime then
-        List.reverse checkedLogs ++ newLog :: ( recentLogTime, recentLog ) :: toCheckLogs
+    else if Time.posixToMillis newLog.timestamp > Time.posixToMillis recentLog.timestamp then
+        List.reverse checkedLogs ++ newLog :: recentLog :: toCheckLogs
 
     else
         case toCheckLogs of
             [] ->
-                List.reverse checkedLogs ++ [ ( recentLogTime, recentLog ), newLog ]
+                List.reverse checkedLogs ++ [ recentLog, newLog ]
 
             nextMostRecent :: rest ->
-                upsetLogHelper newLog (( recentLogTime, recentLog ) :: checkedLogs) nextMostRecent rest
+                upsetLogHelper newLog (recentLog :: checkedLogs) nextMostRecent rest
 
 
-insertLog : Log -> LoadedLogs -> LoadedLogs
-insertLog newLog ( logs, unloadedLogs ) =
+toEditableLog : String -> Log -> EditableLogList
+toEditableLog sha log =
+    { timestamp = log.date
+    , currentLog =
+        Fresh
+            { date = log.date
+            , title = Unmodified log.title
+            , content = Unmodified log.content
+            }
+    , logHistory = []
+    , sha = sha
+    }
+
+
+insertLog : String -> Log -> LoadedLogs -> LoadedLogs
+insertLog sha newLog ( logs, unloadedLogs ) =
     ( case logs of
         [] ->
-            [ ( newLog.date, ( newLog, [] ) ) ]
+            [ toEditableLog sha newLog ]
 
         recentLog :: rest ->
-            insertLogHelper newLog [] recentLog rest
+            insertLogHelper (toEditableLog sha newLog) [] recentLog rest
     , unloadedLogs
     )
 
 
-insertLogHelper : Log -> List ( Time.Posix, NonEmptyList Log ) -> ( Time.Posix, NonEmptyList Log ) -> List ( Time.Posix, NonEmptyList Log ) -> List ( Time.Posix, NonEmptyList Log )
-insertLogHelper newLog checkedLogs ( recentLogTime, recentLog ) toCheckLogs =
-    if Time.posixToMillis newLog.date > Time.posixToMillis recentLogTime then
-        List.reverse checkedLogs ++ ( newLog.date, ( newLog, [] ) ) :: ( recentLogTime, recentLog ) :: toCheckLogs
+insertLogHelper : EditableLogList -> List EditableLogList -> EditableLogList -> List EditableLogList -> List EditableLogList
+insertLogHelper newLog checkedLogs recentLog toCheckLogs =
+    if Time.posixToMillis newLog.timestamp > Time.posixToMillis recentLog.timestamp then
+        List.reverse checkedLogs ++ newLog :: recentLog :: toCheckLogs
 
     else
         case toCheckLogs of
             [] ->
-                List.reverse checkedLogs ++ [ ( newLog.date, ( newLog, [] ) ), ( recentLogTime, recentLog ) ]
+                List.reverse checkedLogs ++ [ newLog, recentLog ]
 
             nextMostRecent :: rest ->
-                insertLogHelper newLog (( recentLogTime, recentLog ) :: checkedLogs) nextMostRecent rest
+                insertLogHelper newLog (recentLog :: checkedLogs) nextMostRecent rest
 
 
 view : FrontendModel -> Browser.Document FrontendMsg
@@ -877,24 +1090,45 @@ loader =
     Html.div [ Css.loader ] []
 
 
-viewLog : ( Time.Posix, NonEmptyList Log ) -> ( String, Html FrontendMsg )
-viewLog ( createdAt, ( log, _ ) ) =
-    ( createdAt |> Time.posixToMillis |> String.fromInt
-    , Html.form [ Css.previousLogTitle ]
+viewLog : EditableLogList -> ( String, Html FrontendMsg )
+viewLog log =
+    let
+        currentVal modifiable =
+            case modifiable of
+                Unmodified val ->
+                    val
+
+                Modified { modified } ->
+                    modified
+    in
+    ( log.timestamp |> Time.posixToMillis |> String.fromInt
+    , Html.form
+        [ Css.previousLogTitle
+        , Html.Events.onSubmit (SubmitExistingChange log.timestamp)
+        ]
         [ Html.label [ Css.previousLogTitle ]
             [ Html.input
-                [ Html.Attributes.value log.title
+                [ Html.Attributes.value (currentVal (submittableValue log.currentLog).title)
                 , Html.Attributes.placeholder "Title"
+                , Html.Events.onInput (ExistingLogTitleChanged log.timestamp)
                 ]
                 []
             ]
         , Html.label [ Css.previousLogContent ]
             [ Html.textarea
-                [ Html.Attributes.value log.content
+                [ Html.Attributes.value (currentVal (submittableValue log.currentLog).content)
                 , Html.Attributes.placeholder "Content"
+                , Html.Events.onInput (ExistingLogContentChanged log.timestamp)
                 ]
                 []
             ]
+        , case ( (submittableValue log.currentLog).title, (submittableValue log.currentLog).content ) of
+            ( Unmodified _, Unmodified _ ) ->
+                Html.text ""
+
+            _ ->
+                Html.button [ Html.Attributes.type_ "submit" ]
+                    [ Html.text "Store changes" ]
         ]
     )
 
@@ -904,10 +1138,5 @@ modal options attributes =
     Html.node "dialog"
         (Html.Attributes.property "___wolfadex_modal__open" (Json.Encode.bool (Debug.log "isOpen" options.isOpen))
             :: Html.Events.on "close" (Json.Decode.succeed options.onClose)
-            -- :: (if options.isOpen then
-            --         Html.Attributes.attribute "open" ""
-            --     else
-            --         Html.Attributes.class ""
-            --    )
             :: attributes
         )

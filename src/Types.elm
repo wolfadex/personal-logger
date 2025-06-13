@@ -10,7 +10,7 @@ import Url exposing (Url)
 
 type alias FrontendModel =
     { key : Key
-    , newLog : NewLog
+    , newLog : Submittable { title : String, content : String }
     , logs : LogResult
 
     -- Settings
@@ -33,9 +33,16 @@ type Theme
 
 
 type alias LoadedLogs =
-    ( List ( Time.Posix, NonEmptyList Log )
-    , List ( Time.Posix, String )
+    ( List EditableLogList
+    , List UnloadedLog
     )
+
+
+type alias UnloadedLog =
+    { timestamp : Time.Posix
+    , downloadUrl : String
+    , sha : String
+    }
 
 
 type LogResult
@@ -45,10 +52,41 @@ type LogResult
     | Failure (Maybe LoadedLogs) String
 
 
-type NewLog
-    = Fresh { title : String, content : String }
-    | Submitting { title : String, content : String }
-    | Issue { title : String, content : String } String
+type Submittable a
+    = Fresh a
+    | Submitting a
+    | Issue a String
+
+
+submittableValue : Submittable a -> a
+submittableValue submittable =
+    case submittable of
+        Fresh a ->
+            a
+
+        Submitting a ->
+            a
+
+        Issue a _ ->
+            a
+
+
+toSubmittable : Submittable a -> Submittable a
+toSubmittable submittable =
+    case submittable of
+        Fresh a ->
+            Submitting a
+
+        Submitting a ->
+            Submitting a
+
+        Issue a _ ->
+            Submitting a
+
+
+type Modifiable
+    = Unmodified String
+    | Modified { original : String, modified : String }
 
 
 type Field raw parsed
@@ -57,8 +95,19 @@ type Field raw parsed
     | Committed raw (Result String parsed)
 
 
-type alias NonEmptyList a =
-    ( a, List a )
+type alias EditableLogList =
+    { timestamp : Time.Posix
+    , currentLog : Submittable EditableLog
+    , logHistory : List Log
+    , sha : String
+    }
+
+
+type alias EditableLog =
+    { date : Time.Posix
+    , title : Modifiable
+    , content : Modifiable
+    }
 
 
 type alias Log =
@@ -88,6 +137,7 @@ type FrontendMsg
     | NewLogContentChanged String
     | ExistingLogTitleChanged Time.Posix String
     | ExistingLogContentChanged Time.Posix String
+    | SubmitExistingChange Time.Posix
     | LoadMoreLogs
     | UserClickedSettingsOpen
     | UserClickedSettingsClose
@@ -98,7 +148,8 @@ type FrontendMsg
 type ToBackend
     = TB_LoadLogs StorageDetails
     | TB_CreateNewLog StorageDetails Bool { title : String, content : String }
-    | TB_LoadMoreLogs StorageDetails (List ( Time.Posix, String ))
+    | TB_LoadMoreLogs StorageDetails (List UnloadedLog)
+    | TB_SubmitExistingChange StorageDetails EditableLogList
 
 
 type alias StorageDetails =
@@ -110,12 +161,15 @@ type alias StorageDetails =
 
 type BackendMsg
     = LogsLoadResponse Lamdera.SessionId (Result Http.Error LoadedLogs)
-    | MoreLogsLoadResponse Lamdera.SessionId (Result Http.Error (List ( Time.Posix, NonEmptyList Log )))
+    | MoreLogsLoadResponse Lamdera.SessionId (Result Http.Error (List EditableLogList))
     | CreateNewLog Lamdera.SessionId StorageDetails Bool { title : String, content : String } Time.Posix
-    | LogCreated Lamdera.SessionId Log (Result Http.Error ())
+    | LogCreated Lamdera.SessionId Log (Result Http.Error String)
+    | StoreExistingChange Lamdera.SessionId StorageDetails EditableLogList Time.Posix
+    | LogStored Lamdera.SessionId ( ( Time.Posix, String ), EditableLog, List Log ) (Result Http.Error ())
 
 
 type ToFrontend
     = TF_LogsLoaded (Result String LoadedLogs)
-    | TF_MoreLogsLoaded (Result String (List ( Time.Posix, NonEmptyList Log )))
-    | TF_InsertLog Log
+    | TF_MoreLogsLoaded (Result String (List EditableLogList))
+    | TF_InsertLog Log (Result String String)
+    | TF_LogUpdated EditableLogList (Result String ())

@@ -77,21 +77,147 @@ update msg model =
                     ]
                         |> Json.Encode.object
                         |> Http.jsonBody
-                , expect = Http.expectWhatever (LogCreated sessionId { date = now, title = log.title, content = log.content })
+                , expect =
+                    Http.expectJson
+                        (LogCreated sessionId { date = now, title = log.title, content = log.content })
+                        (Json.Decode.field "sha" Json.Decode.string)
                 }
             )
 
-        LogCreated sessionId log (Err err) ->
-            ( model, Cmd.none )
-
-        LogCreated sessionId log (Ok ()) ->
+        LogCreated sessionId log (Err _) ->
             ( model
-            , Lamdera.sendToFrontend sessionId (TF_InsertLog log)
+            , Lamdera.sendToFrontend sessionId (TF_InsertLog log (Err "Failed to store log"))
+            )
+
+        LogCreated sessionId log (Ok sha) ->
+            ( model
+            , Lamdera.sendToFrontend sessionId (TF_InsertLog log (Ok sha))
+            )
+
+        StoreExistingChange sessionId details log now ->
+            ( model
+            , githubRequest
+                { method = "PUT"
+                , token = details.token
+                , path = "/repos/" ++ details.owner ++ "/" ++ details.repo ++ "/contents/logs/" ++ String.fromInt (Time.posixToMillis log.timestamp) ++ ".json"
+                , body =
+                    [ ( "message", Json.Encode.string "Log edit" )
+                    , ( "sha", Json.Encode.string log.sha )
+                    , ( "content"
+                      , ({ date = now
+                         , title =
+                            case (submittableValue log.currentLog).title of
+                                Unmodified v ->
+                                    v
+
+                                Modified { modified } ->
+                                    modified
+                         , content =
+                            case (submittableValue log.currentLog).content of
+                                Unmodified v ->
+                                    v
+
+                                Modified { modified } ->
+                                    modified
+                         }
+                            :: { date = (submittableValue log.currentLog).date
+                               , title =
+                                    case (submittableValue log.currentLog).title of
+                                        Unmodified v ->
+                                            v
+
+                                        Modified { original } ->
+                                            original
+                               , content =
+                                    case (submittableValue log.currentLog).content of
+                                        Unmodified v ->
+                                            v
+
+                                        Modified { original } ->
+                                            original
+                               }
+                            :: log.logHistory
+                        )
+                            |> Json.Encode.list
+                                (\l ->
+                                    [ ( "date", Json.Encode.int (Time.posixToMillis l.date) )
+                                    , ( "title", Json.Encode.string l.title )
+                                    , ( "content", Json.Encode.string l.content )
+                                    ]
+                                        |> Json.Encode.object
+                                )
+                            |> Json.Encode.encode 2
+                            |> Base64.encode
+                            |> Json.Encode.string
+                      )
+                    ]
+                        |> Json.Encode.object
+                        |> Http.jsonBody
+                , expect =
+                    Http.expectWhatever
+                        (LogStored sessionId
+                            ( ( log.timestamp, log.sha )
+                            , { date = now
+                              , title =
+                                    Unmodified <|
+                                        case (submittableValue log.currentLog).title of
+                                            Unmodified v ->
+                                                v
+
+                                            Modified { modified } ->
+                                                modified
+                              , content =
+                                    Unmodified <|
+                                        case (submittableValue log.currentLog).content of
+                                            Unmodified v ->
+                                                v
+
+                                            Modified { modified } ->
+                                                modified
+                              }
+                            , { date = (submittableValue log.currentLog).date
+                              , title =
+                                    case (submittableValue log.currentLog).title of
+                                        Unmodified v ->
+                                            v
+
+                                        Modified { original } ->
+                                            original
+                              , content =
+                                    case (submittableValue log.currentLog).content of
+                                        Unmodified v ->
+                                            v
+
+                                        Modified { original } ->
+                                            original
+                              }
+                                :: log.logHistory
+                            )
+                        )
+                }
+            )
+
+        LogStored sessionId ( ( timestamp, sha ), newLog, logHistory ) (Err _) ->
+            ( model
+            , Lamdera.sendToFrontend sessionId
+                (TF_LogUpdated
+                    { timestamp = timestamp, currentLog = Issue newLog "Failed to saved log changes", logHistory = logHistory, sha = sha }
+                    (Err "Failed to saved log changes")
+                )
+            )
+
+        LogStored sessionId ( ( timestamp, sha ), newLog, logHistory ) (Ok ()) ->
+            ( model
+            , Lamdera.sendToFrontend sessionId
+                (TF_LogUpdated
+                    { timestamp = timestamp, currentLog = Fresh newLog, logHistory = logHistory, sha = sha }
+                    (Ok ())
+                )
             )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
-updateFromFrontend sessionId clientId msg model =
+updateFromFrontend sessionId _ msg model =
     case msg of
         TB_LoadLogs details ->
             ( model
@@ -130,7 +256,7 @@ updateFromFrontend sessionId clientId msg model =
                                     case
                                         Json.Decode.decodeString
                                             (Json.Decode.list
-                                                (Json.Decode.map2 Tuple.pair
+                                                (Json.Decode.map3 (\name downloadUrl sha -> ( name, downloadUrl, sha ))
                                                     (Json.Decode.field "name" Json.Decode.string
                                                         |> Json.Decode.andThen
                                                             (\nameStr ->
@@ -148,6 +274,7 @@ updateFromFrontend sessionId clientId msg model =
                                                             )
                                                     )
                                                     (Json.Decode.field "download_url" Json.Decode.string)
+                                                    (Json.Decode.field "sha" Json.Decode.string)
                                                 )
                                             )
                                             body
@@ -169,7 +296,7 @@ updateFromFrontend sessionId clientId msg model =
                         revList
                             |> List.take 5
                             |> List.map
-                                (\( name, downloadUrl ) ->
+                                (\( name, downloadUrl, sha ) ->
                                     Http.task
                                         { method = "GET"
                                         , headers =
@@ -191,7 +318,6 @@ updateFromFrontend sessionId clientId msg model =
                                         , body = Http.emptyBody
                                         , resolver =
                                             Http.stringResolver
-                                                -- (LogsLoadResponse sessionId)
                                                 (\response ->
                                                     case response of
                                                         Http.BadUrl_ url ->
@@ -209,7 +335,7 @@ updateFromFrontend sessionId clientId msg model =
                                                         Http.GoodStatus_ _ body ->
                                                             case Json.Decode.decodeString decodeLog body of
                                                                 Ok value ->
-                                                                    Ok ( name, value )
+                                                                    Ok ( name, value, sha )
 
                                                                 Err err ->
                                                                     Err (Http.BadBody (Json.Decode.errorToString err))
@@ -220,6 +346,20 @@ updateFromFrontend sessionId clientId msg model =
                             |> Task.sequence
                             |> Task.map (\loadedLogs -> ( loadedLogs, List.drop 5 revList ))
                     )
+                |> Task.map
+                    (\( loaded, unloaded ) ->
+                        ( List.map
+                            (\( time, ( log, logHistory ), sha ) ->
+                                { timestamp = time, currentLog = log, logHistory = logHistory, sha = sha }
+                            )
+                            loaded
+                        , List.map
+                            (\( timestamp, downloadUrl, sha ) ->
+                                { timestamp = timestamp, downloadUrl = downloadUrl, sha = sha }
+                            )
+                            unloaded
+                        )
+                    )
                 |> Task.attempt (LogsLoadResponse sessionId)
             )
 
@@ -229,11 +369,11 @@ updateFromFrontend sessionId clientId msg model =
                 |> Task.perform (CreateNewLog sessionId details isFirstLog log)
             )
 
-        TB_LoadMoreLogs details toLoad ->
+        TB_LoadMoreLogs details logsToLoad ->
             ( model
-            , toLoad
+            , logsToLoad
                 |> List.map
-                    (\( name, downloadUrl ) ->
+                    (\toLoad ->
                         Http.task
                             { method = "GET"
                             , headers =
@@ -251,11 +391,10 @@ updateFromFrontend sessionId clientId msg model =
                                             Env.Production ->
                                                 ""
                                 in
-                                proxy ++ downloadUrl
+                                proxy ++ toLoad.downloadUrl
                             , body = Http.emptyBody
                             , resolver =
                                 Http.stringResolver
-                                    -- (LogsLoadResponse sessionId)
                                     (\response ->
                                         case response of
                                             Http.BadUrl_ url ->
@@ -273,7 +412,7 @@ updateFromFrontend sessionId clientId msg model =
                                             Http.GoodStatus_ _ body ->
                                                 case Json.Decode.decodeString decodeLog body of
                                                     Ok value ->
-                                                        Ok ( name, value )
+                                                        Ok ( toLoad.timestamp, value, toLoad.sha )
 
                                                     Err err ->
                                                         Err (Http.BadBody (Json.Decode.errorToString err))
@@ -282,82 +421,31 @@ updateFromFrontend sessionId clientId msg model =
                             }
                     )
                 |> Task.sequence
+                |> Task.map (List.map (\( timestamp, ( log, logHistory ), sha ) -> { timestamp = timestamp, currentLog = log, logHistory = logHistory, sha = sha }))
                 |> Task.attempt (MoreLogsLoadResponse sessionId)
             )
 
-
-expectJsonCustomBadStatus : (Result Http.Error a -> msg) -> (Http.Metadata -> String -> Result Http.Error a) -> Json.Decode.Decoder a -> Http.Expect msg
-expectJsonCustomBadStatus toMsg handleBadStatus decoder =
-    Http.expectStringResponse toMsg <|
-        \response ->
-            case response of
-                Http.BadUrl_ url ->
-                    Err (Http.BadUrl url)
-
-                Http.Timeout_ ->
-                    Err Http.Timeout
-
-                Http.NetworkError_ ->
-                    Err Http.NetworkError
-
-                Http.BadStatus_ metadata body ->
-                    handleBadStatus metadata body
-
-                Http.GoodStatus_ _ body ->
-                    case Json.Decode.decodeString decoder body of
-                        Ok value ->
-                            Ok value
-
-                        Err err ->
-                            Err (Http.BadBody (Json.Decode.errorToString err))
-
-
-decodeLogs : Json.Decode.Decoder (List ( Time.Posix, NonEmptyList Log ))
-decodeLogs =
-    Json.Decode.list <|
-        Json.Decode.map2 Tuple.pair
-            (Json.Decode.field "name" Json.Decode.string
-                |> Json.Decode.andThen
-                    (\nameStr ->
-                        case
-                            nameStr
-                                |> String.replace ".json" ""
-                                |> String.toInt
-                                |> Maybe.map Time.millisToPosix
-                        of
-                            Nothing ->
-                                Json.Decode.fail "Expected a file name like <posix timestamp>.json"
-
-                            Just name ->
-                                Json.Decode.succeed name
-                    )
-            )
-            (Json.Decode.field "content" Json.Decode.string
-                |> Json.Decode.andThen
-                    (\content ->
-                        case Json.Decode.decodeString decodeLog content of
-                            Ok log ->
-                                Json.Decode.succeed log
-
-                            Err err ->
-                                Json.Decode.fail (Json.Decode.errorToString err)
-                    )
+        TB_SubmitExistingChange details log ->
+            ( model
+            , Time.now
+                |> Task.perform (StoreExistingChange sessionId details log)
             )
 
 
-decodeLog : Json.Decode.Decoder (NonEmptyList Log)
+decodeLog : Json.Decode.Decoder ( Submittable EditableLog, List Log )
 decodeLog =
-    Json.Decode.map3
-        (\date title content ->
-            { date = Time.millisToPosix date
-            , title = title
-            , content = content
-            }
+    Json.Decode.list
+        (Json.Decode.map3
+            (\date title content ->
+                { date = Time.millisToPosix date
+                , title = title
+                , content = content
+                }
+            )
+            (Json.Decode.field "date" Json.Decode.int)
+            (Json.Decode.field "title" Json.Decode.string)
+            (Json.Decode.field "content" Json.Decode.string)
         )
-        (Json.Decode.field "date" Json.Decode.int)
-        (Json.Decode.field "title" Json.Decode.string)
-        (Json.Decode.field "content" Json.Decode.string)
-        |> Json.Decode.list
         |> Json.Decode.andThen
             (\logs ->
                 case logs of
@@ -365,7 +453,14 @@ decodeLog =
                         Json.Decode.fail "Empty logs"
 
                     first :: rest ->
-                        Json.Decode.succeed ( first, rest )
+                        Json.Decode.succeed
+                            ( Fresh
+                                { date = first.date
+                                , title = Unmodified first.title
+                                , content = Unmodified first.content
+                                }
+                            , rest
+                            )
             )
 
 
