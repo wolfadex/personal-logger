@@ -1,11 +1,14 @@
 [
-  {
-    "command": ["npm", "run", "dev:elm"]
-  },
-  {
-    "command": ["npm", "run", "dev:css"]
-  },
-  {
-    "command": ["npm", "run", "dev:review"]
-  }
+    {
+        "command": ["npm", "run", "dev:elm"]
+    },
+    {
+        "command": ["npm", "run", "dev:css"]
+    },
+    {
+        "command": ["npm", "run", "dev:review"]
+    },
+    {
+        "command": ["npm", "run", "dev:test"]
+    }
 ]

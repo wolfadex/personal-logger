@@ -816,7 +816,7 @@ insertLogHelper newLog checkedLogs recentLog toCheckLogs =
     else
         case toCheckLogs of
             [] ->
-                List.reverse checkedLogs ++ [ newLog, recentLog ]
+                List.reverse checkedLogs ++ [ recentLog, newLog ]
 
             nextMostRecent :: rest ->
                 insertLogHelper newLog (recentLog :: checkedLogs) nextMostRecent rest
