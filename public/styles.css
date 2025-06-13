@@ -83,8 +83,12 @@ button:active {
 
 button[type="submit"] {
     grid-column: 2;
-    width: 9rem;
+    width: 11rem;
     justify-self: flex-end;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    align-items: center;
 }
 
 /* From Uiverse.io by alexruix */
@@ -211,6 +215,23 @@ button.storeChangesButton:active {
     right: 1rem;
 }
 
+.settingsModel[open] {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.kofiButton {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+}
+
+.modalHeader {
+    display: flex;
+    justify-content: space-between;
+}
+
 /* From Uiverse.io by Shoh2008 */
 .loader {
     position: relative;
@@ -293,6 +314,27 @@ button.storeChangesButton:active {
 
     100% {
         transform: translate(0, -1em) rotate(-225deg);
+    }
+}
+
+/* From Uiverse.io by Fernando-sv */
+
+.loaderSimple {
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-left-color: transparent;
+    width: 1rem;
+    height: 1rem;
+    animation: spin89345 1s linear infinite;
+}
+
+@keyframes spin89345 {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
     }
 }
 

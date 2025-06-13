@@ -411,4 +411,70 @@ suite =
                             , []
                             )
             ]
+        , test "finds the correct log to store" <|
+            \() ->
+                let
+                    logRecent =
+                        { timestamp = Time.millisToPosix 2
+                        , currentLog =
+                            Fresh
+                                { date = Time.millisToPosix 2
+                                , title = Unmodified "Title 2"
+                                , content = Unmodified "Content 2"
+                                }
+                        , logHistory = []
+                        , sha = "test_sha_2"
+                        }
+
+                    logOld =
+                        { timestamp = Time.millisToPosix 0
+                        , currentLog =
+                            Fresh
+                                { date = Time.millisToPosix 0
+                                , title = Unmodified "Title 0"
+                                , content = Unmodified "Content 0"
+                                }
+                        , logHistory = []
+                        , sha = "test_sha_0"
+                        }
+
+                    allLogs =
+                        [ logRecent
+                        , logToFind
+                        , logOld
+                        ]
+
+                    logToFind =
+                        { timestamp = Time.millisToPosix 1
+                        , currentLog =
+                            Fresh
+                                { date = Time.millisToPosix 1
+                                , title = Unmodified "Title 1"
+                                , content = Unmodified "Content 1"
+                                }
+                        , logHistory = []
+                        , sha = "test_sha_1"
+                        }
+                in
+                Frontend.findLogToStore
+                    (Time.millisToPosix 1)
+                    allLogs
+                    |> Expect.equal
+                        (Just
+                            ( [ logRecent
+                              , { timestamp = Time.millisToPosix 1
+                                , currentLog =
+                                    Submitting
+                                        { date = Time.millisToPosix 1
+                                        , title = Unmodified "Title 1"
+                                        , content = Unmodified "Content 1"
+                                        }
+                                , logHistory = []
+                                , sha = "test_sha_1"
+                                }
+                              , logOld
+                              ]
+                            , logToFind
+                            )
+                        )
         ]

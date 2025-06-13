@@ -877,6 +877,21 @@ view model =
             ]
             [ Html.text "Settings" ]
         , viewSettings model
+        , Html.a
+            [ Html.Attributes.href "https://ko-fi.com/D1D81GEXYM"
+            , Html.Attributes.target "_blank"
+            , Css.kofiButton
+            ]
+            [ Html.img
+                [ Html.Attributes.height 36
+                , Html.Attributes.style "border" "0px"
+                , Html.Attributes.style "height" "36px"
+                , Html.Attributes.src "https://storage.ko-fi.com/cdn/kofi6.png?v=6"
+                , Html.Attributes.attribute "border" "0"
+                , Html.Attributes.alt "Buy Me a Coffee at ko-fi.com"
+                ]
+                []
+            ]
         ]
     }
 
@@ -884,8 +899,8 @@ view model =
 viewSettings : FrontendModel -> Html FrontendMsg
 viewSettings model =
     modal { isOpen = model.settingsOpen, onClose = UserClickedSettingsClose }
-        []
-        [ Html.h2 []
+        [ Css.settingsModel ]
+        [ Html.h2 [ Css.modalHeader ]
             [ Html.text "Settings"
             , Html.button
                 [ Html.Attributes.attribute "aria-label" "Close"
@@ -1053,7 +1068,14 @@ viewLogs model isLoading ( logs, unloadedLogs ) =
                         Html.text ""
                 , Html.button
                     [ Html.Attributes.type_ "submit" ]
-                    [ Html.text "Log entry" ]
+                    [ Html.text "Store log"
+                    , case model.newLog of
+                        Submitting _ ->
+                            loaderSimple
+
+                        _ ->
+                            Html.text ""
+                    ]
                 ]
 
         loadMoreButton =
@@ -1100,6 +1122,11 @@ loader =
     Html.div [ Css.loader ] []
 
 
+loaderSimple : Html msg
+loaderSimple =
+    Html.div [ Css.loaderSimple ] []
+
+
 viewLog : EditableLogList -> ( String, Html FrontendMsg )
 viewLog log =
     let
@@ -1141,7 +1168,14 @@ viewLog log =
                     [ Css.storeChangesButton
                     , Html.Attributes.type_ "submit"
                     ]
-                    [ Html.text "Store changes" ]
+                    [ Html.text "Store changes"
+                    , case log.currentLog of
+                        Submitting _ ->
+                            loaderSimple
+
+                        _ ->
+                            Html.text ""
+                    ]
         ]
     )
 

@@ -1,4 +1,4 @@
-module Css exposing (inputError, logList, previousLog, previousLogTitle, previousLogContent, storeChangesButton, settingsButton, loader, theme_1, theme_2, theme_3, theme_4, theme_5, theme_6)
+module Css exposing (inputError, logList, previousLog, previousLogTitle, previousLogContent, storeChangesButton, settingsButton, settingsModel, kofiButton, modalHeader, loader, loaderSimple, theme_1, theme_2, theme_3, theme_4, theme_5, theme_6)
 
 import Html
 import Html.Attributes
@@ -39,9 +39,29 @@ settingsButton =
     Html.Attributes.class "settingsButton"
 
 
+settingsModel : Html.Attribute msg
+settingsModel =
+    Html.Attributes.class "settingsModel"
+
+
+kofiButton : Html.Attribute msg
+kofiButton =
+    Html.Attributes.class "kofiButton"
+
+
+modalHeader : Html.Attribute msg
+modalHeader =
+    Html.Attributes.class "modalHeader"
+
+
 loader : Html.Attribute msg
 loader =
     Html.Attributes.class "loader"
+
+
+loaderSimple : Html.Attribute msg
+loaderSimple =
+    Html.Attributes.class "loaderSimple"
 
 
 theme_1 : Html.Attribute msg
