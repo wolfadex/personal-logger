@@ -557,7 +557,7 @@ findLogToStoreHelper timestamp searchedLogs logs =
                 Just ( List.reverse searchedLogs ++ { log | currentLog = toSubmittable log.currentLog } :: rest, log )
 
             else
-                findLogToStore timestamp rest
+                findLogToStoreHelper timestamp (log :: searchedLogs) rest
 
 
 commitField : (raw -> Result String parsed) -> Field raw parsed -> Field raw parsed
