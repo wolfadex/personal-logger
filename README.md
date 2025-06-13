@@ -2,7 +2,7 @@
 
 A simple tool for simple journaling
 
-![the app, with input for the next log, and an example log](./Screenshot 2025-06-13 at 5.36.58 PM.png)
+<img width="400" src="./Screenshot_2025-06-13_at_5_36_58 PM.png" />
 
 ## Built with
 - [lamdera](https://lamdera.com/) for platform and hosting
