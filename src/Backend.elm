@@ -33,7 +33,7 @@ update msg model =
         LogsLoadResponse sessionId response ->
             ( model
             , response
-                |> Result.mapError Debug.toString
+                |> Result.mapError (\_ -> "Failed to load logs")
                 |> TF_LogsLoaded
                 |> Lamdera.sendToFrontend sessionId
             )
@@ -41,7 +41,7 @@ update msg model =
         MoreLogsLoadResponse sessionId response ->
             ( model
             , response
-                |> Result.mapError Debug.toString
+                |> Result.mapError (\_ -> "Failed to load logs")
                 |> TF_MoreLogsLoaded
                 |> Lamdera.sendToFrontend sessionId
             )
