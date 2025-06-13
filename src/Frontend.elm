@@ -1113,7 +1113,7 @@ viewLog log =
     in
     ( log.timestamp |> Time.posixToMillis |> String.fromInt
     , Html.form
-        [ Css.previousLogTitle
+        [ Css.previousLog
         , Html.Events.onSubmit (SubmitExistingChange log.timestamp)
         ]
         [ Html.label [ Css.previousLogTitle ]
@@ -1137,7 +1137,10 @@ viewLog log =
                 Html.text ""
 
             _ ->
-                Html.button [ Html.Attributes.type_ "submit" ]
+                Html.button
+                    [ Css.storeChangesButton
+                    , Html.Attributes.type_ "submit"
+                    ]
                     [ Html.text "Store changes" ]
         ]
     )
