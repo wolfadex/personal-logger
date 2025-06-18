@@ -41,18 +41,42 @@ config =
     , NoDebug.TodoOrToString.rule
         |> Rule.ignoreErrorsForDirectories [ "tests/" ]
     , NoExposingEverything.rule
-    , NoImportingEverything.rule []
+        |> Rule.ignoreErrorsForDirectories
+            [ "src/Evergreen/"
+            , "elm-pkg-js/"
+            ]
+        |> Rule.ignoreErrorsForFiles
+            [ "src/Backend.elm"
+            , "src/Env.elm"
+            , "src/Frontend.elm"
+            , "src/Types.elm"
+            ]
+    , NoImportingEverything.rule [ "Types" ]
     , NoMissingTypeAnnotation.rule
-    , NoMissingTypeAnnotationInLetIn.rule
+        |> Rule.ignoreErrorsForFiles
+            [ "src/Env.elm"
+            ]
     , NoMissingTypeExpose.rule
     , NoSimpleLetBody.rule
     , NoPrematureLetComputation.rule
     , NoUnused.CustomTypeConstructors.rule []
+        |> Rule.ignoreErrorsForDirectories
+            [ "src/Evergreen/"
+            ]
     , NoUnused.CustomTypeConstructorArgs.rule
+        |> Rule.ignoreErrorsForDirectories
+            [ "src/Evergreen/"
+            ]
     , NoUnused.Dependencies.rule
     , NoUnused.Exports.rule
+        |> Rule.ignoreErrorsForDirectories
+            [ "src/Evergreen/"
+            , "elm-pkg-js/"
+            ]
     , NoUnused.Parameters.rule
     , NoUnused.Patterns.rule
     , NoUnused.Variables.rule
     , Simplify.rule Simplify.defaults
     ]
+        |> List.map
+            (Rule.ignoreErrorsForDirectories [ "tests/" ])

@@ -1,9 +1,6 @@
 module LocalStorage exposing (..)
 
 {-| Provides a simple way to hook up Javascript copy-to-clipboard functionality
-
-@docs copy
-
 -}
 
 

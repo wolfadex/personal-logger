@@ -16,7 +16,7 @@ app =
         { init = init
         , update = update
         , updateFromFrontend = updateFromFrontend
-        , subscriptions = \m -> Sub.none
+        , subscriptions = \_ -> Sub.none
         }
 
 
@@ -323,10 +323,9 @@ updateFromFrontend sessionId _ msg model =
                                     Http.task
                                         { method = "GET"
                                         , headers =
-                                            List.filterMap identity
-                                                [ Just <| Http.header "Accept" "application/vnd.github.object+json"
-                                                , Just <| Http.header "X-GitHub-Api-Version" "2022-11-28"
-                                                ]
+                                            [ Http.header "Accept" "application/vnd.github.object+json"
+                                            , Http.header "X-GitHub-Api-Version" "2022-11-28"
+                                            ]
                                         , url =
                                             let
                                                 proxy =
@@ -400,10 +399,9 @@ updateFromFrontend sessionId _ msg model =
                         Http.task
                             { method = "GET"
                             , headers =
-                                List.filterMap identity
-                                    [ Just <| Http.header "Accept" "application/vnd.github.object+json"
-                                    , Just <| Http.header "X-GitHub-Api-Version" "2022-11-28"
-                                    ]
+                                [ Http.header "Accept" "application/vnd.github.object+json"
+                                , Http.header "X-GitHub-Api-Version" "2022-11-28"
+                                ]
                             , url =
                                 let
                                     proxy =

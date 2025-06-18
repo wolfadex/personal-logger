@@ -1263,6 +1263,7 @@ loaderSimple =
 viewLog : EditableLogList -> ( String, Html FrontendMsg )
 viewLog log =
     let
+        currentVal : Modifiable -> String
         currentVal modifiable =
             case modifiable of
                 Unmodified val ->
@@ -1316,7 +1317,7 @@ viewLog log =
 modal : { isOpen : Bool, onClose : msg } -> List (Html.Attribute msg) -> List (Html msg) -> Html msg
 modal options attributes =
     Html.node "dialog"
-        (Html.Attributes.property "___wolfadex_modal__open" (Json.Encode.bool (Debug.log "isOpen" options.isOpen))
+        (Html.Attributes.property "___wolfadex_modal__open" (Json.Encode.bool options.isOpen)
             :: Html.Events.on "close" (Json.Decode.succeed options.onClose)
             :: attributes
         )
