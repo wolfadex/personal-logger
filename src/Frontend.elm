@@ -1,8 +1,10 @@
 module Frontend exposing (..)
 
+import AppUrl
 import Browser exposing (UrlRequest(..))
-import Browser.Navigation as Nav
+import Browser.Navigation
 import Css
+import Dict
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -29,21 +31,118 @@ app =
         }
 
 
-init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
-init _ key =
-    ( { key = key
-      , logs = Unloaded
-      , newLog = Fresh { title = "", content = "" }
-      , owner = Untouched ""
-      , repo = Untouched ""
-      , token = Untouched ""
-      , settingsOpen = False
-      , theme = NoTheme
-      }
+init : Url.Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
+init url key =
+    let
+        appUrl =
+            AppUrl.fromUrl url
+
+        possibleOwner =
+            case appUrl.path of
+                owner :: _ ->
+                    if String.isEmpty owner then
+                        Nothing
+
+                    else
+                        Just owner
+
+                _ ->
+                    Nothing
+
+        possibleRepo =
+            case appUrl.path of
+                _ :: repo :: _ ->
+                    if String.isEmpty repo then
+                        Nothing
+
+                    else
+                        Just repo
+
+                _ ->
+                    Nothing
+
+        possibleToken =
+            case appUrl.path of
+                _ :: _ :: token :: _ ->
+                    if String.isEmpty token then
+                        Nothing
+
+                    else
+                        Just token
+
+                _ ->
+                    Nothing
+
+        baseModel =
+            { key = key
+            , logs = Unloaded
+            , newLog = Fresh { title = "", content = "" }
+            , owner =
+                case possibleOwner of
+                    Nothing ->
+                        Untouched ""
+
+                    Just owner ->
+                        Committed owner (Ok owner)
+            , repo =
+                case possibleRepo of
+                    Nothing ->
+                        Untouched ""
+
+                    Just repo ->
+                        Committed repo (Ok repo)
+            , token =
+                case possibleToken of
+                    Nothing ->
+                        Untouched ""
+
+                    Just token ->
+                        Committed token (Ok token)
+            , settingsOpen = False
+            , theme = NoTheme
+            }
+    in
+    ( case toStorageDetails baseModel of
+        Just _ ->
+            { baseModel | logs = Loading Nothing }
+
+        Nothing ->
+            baseModel
     , Cmd.batch
         [ LocalStorage.get PkgPorts.ports "theme"
-        , LocalStorage.get PkgPorts.ports "owner"
-        , LocalStorage.get PkgPorts.ports "repo"
+        , case possibleOwner of
+            Nothing ->
+                LocalStorage.get PkgPorts.ports "owner"
+
+            Just owner ->
+                LocalStorage.set PkgPorts.ports "owner" owner
+        , case possibleRepo of
+            Nothing ->
+                LocalStorage.get PkgPorts.ports "repo"
+
+            Just repo ->
+                LocalStorage.set PkgPorts.ports "repo" repo
+        , case possibleToken of
+            Nothing ->
+                Cmd.none
+
+            Just _ ->
+                AppUrl.toString
+                    { path =
+                        List.filterMap identity
+                            [ possibleOwner
+                            , possibleRepo
+                            ]
+                    , queryParameters = Dict.empty
+                    , fragment = Nothing
+                    }
+                    |> Browser.Navigation.replaceUrl key
+        , case toStorageDetails baseModel of
+            Just storageDetails ->
+                Lamdera.sendToBackend (TB_LoadLogs storageDetails)
+
+            Nothing ->
+                Cmd.none
         ]
     )
 
@@ -60,12 +159,12 @@ update msg model =
             case urlRequest of
                 Internal url ->
                     ( model
-                    , Nav.pushUrl model.key (Url.toString url)
+                    , Browser.Navigation.pushUrl model.key (Url.toString url)
                     )
 
                 External url ->
                     ( model
-                    , Nav.load url
+                    , Browser.Navigation.load url
                     )
 
         UrlChanged _ ->
@@ -250,7 +349,7 @@ update msg model =
 
                 Fresh newLog ->
                     case toStorageDetails model of
-                        Just storageDetails ->
+                        Just (StorageWrite storageDetails) ->
                             ( { model
                                 | newLog =
                                     Submitting newLog
@@ -258,6 +357,11 @@ update msg model =
                             , { title = newLog.title, content = newLog.content }
                                 |> TB_CreateNewLog storageDetails (model.logs == Loaded ( [], [] ))
                                 |> Lamdera.sendToBackend
+                            )
+
+                        Just (StorageRead _) ->
+                            ( { model | settingsOpen = True }
+                            , Cmd.none
                             )
 
                         Nothing ->
@@ -267,7 +371,7 @@ update msg model =
 
                 Issue newLog _ ->
                     case toStorageDetails model of
-                        Just storageDetails ->
+                        Just (StorageWrite storageDetails) ->
                             ( { model
                                 | newLog =
                                     Submitting newLog
@@ -275,6 +379,11 @@ update msg model =
                             , { title = newLog.title, content = newLog.content }
                                 |> TB_CreateNewLog storageDetails (model.logs == Loaded ( [], [] ))
                                 |> Lamdera.sendToBackend
+                            )
+
+                        Just (StorageRead _) ->
+                            ( { model | settingsOpen = True }
+                            , Cmd.none
                             )
 
                         Nothing ->
@@ -455,7 +564,10 @@ update msg model =
                                 Nothing ->
                                     ( { model | settingsOpen = True }, Cmd.none )
 
-                                Just storageDetails ->
+                                Just (StorageRead _) ->
+                                    ( { model | settingsOpen = True }, Cmd.none )
+
+                                Just (StorageWrite storageDetails) ->
                                     ( { model | logs = toModelLogs ( loadedLogsSubmitting, unloadedLogs ) }
                                     , logToChange
                                         |> TB_SubmitExistingChange storageDetails
@@ -517,10 +629,10 @@ update msg model =
 
                 Loaded ( _, unloaded ) ->
                     case toStorageDetails model of
-                        Just storageDetails ->
+                        Just _ ->
                             unloaded
                                 |> List.take 5
-                                |> TB_LoadMoreLogs storageDetails
+                                |> TB_LoadMoreLogs
                                 |> Lamdera.sendToBackend
 
                         Nothing ->
@@ -541,10 +653,10 @@ update msg model =
 
                 Failure (Just ( _, unloaded )) _ ->
                     case toStorageDetails model of
-                        Just storageDetails ->
+                        Just _ ->
                             unloaded
                                 |> List.take 5
-                                |> TB_LoadMoreLogs storageDetails
+                                |> TB_LoadMoreLogs
                                 |> Lamdera.sendToBackend
 
                         Nothing ->
@@ -618,10 +730,20 @@ toStorageDetails model =
     case ( model.owner, model.repo, model.token ) of
         ( Committed _ (Ok owner), Committed _ (Ok repo), Committed _ (Ok token) ) ->
             Just
-                { owner = owner
-                , repo = repo
-                , token = token
-                }
+                (StorageWrite
+                    { owner = owner
+                    , repo = repo
+                    , token = token
+                    }
+                )
+
+        ( Committed _ (Ok owner), Committed _ (Ok repo), _ ) ->
+            Just
+                (StorageRead
+                    { owner = owner
+                    , repo = repo
+                    }
+                )
 
         _ ->
             Nothing

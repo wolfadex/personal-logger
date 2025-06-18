@@ -160,12 +160,23 @@ type FrontendMsg
 
 type ToBackend
     = TB_LoadLogs StorageDetails
-    | TB_CreateNewLog StorageDetails Bool { title : String, content : String }
-    | TB_LoadMoreLogs StorageDetails (List UnloadedLog)
-    | TB_SubmitExistingChange StorageDetails EditableLogList
+    | TB_CreateNewLog WriteDetails Bool { title : String, content : String }
+    | TB_LoadMoreLogs (List UnloadedLog)
+    | TB_SubmitExistingChange WriteDetails EditableLogList
 
 
-type alias StorageDetails =
+type StorageDetails
+    = StorageRead ReadDetails
+    | StorageWrite WriteDetails
+
+
+type alias ReadDetails =
+    { owner : String
+    , repo : String
+    }
+
+
+type alias WriteDetails =
     { owner : String
     , repo : String
     , token : String
@@ -175,9 +186,9 @@ type alias StorageDetails =
 type BackendMsg
     = LogsLoadResponse Lamdera.SessionId (Result Http.Error LoadedLogs)
     | MoreLogsLoadResponse Lamdera.SessionId (Result Http.Error (List EditableLogList))
-    | CreateNewLog Lamdera.SessionId StorageDetails Bool { title : String, content : String } Time.Posix
+    | CreateNewLog Lamdera.SessionId WriteDetails Bool { title : String, content : String } Time.Posix
     | LogCreated Lamdera.SessionId Log (Result Http.Error String)
-    | StoreExistingChange Lamdera.SessionId StorageDetails EditableLogList Time.Posix
+    | StoreExistingChange Lamdera.SessionId WriteDetails EditableLogList Time.Posix
     | LogStored Lamdera.SessionId ( ( Time.Posix, String ), EditableLog, List Log ) (Result Http.Error ())
 
 

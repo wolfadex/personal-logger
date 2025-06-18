@@ -50,7 +50,7 @@ update msg model =
             ( model
             , githubRequest
                 { method = "PUT"
-                , token = details.token
+                , token = Just details.token
                 , path = "/repos/" ++ details.owner ++ "/" ++ details.repo ++ "/contents/logs/" ++ String.fromInt (Time.posixToMillis now) ++ ".json"
                 , body =
                     [ ( "message"
@@ -98,7 +98,7 @@ update msg model =
             ( model
             , githubRequest
                 { method = "PUT"
-                , token = details.token
+                , token = Just details.token
                 , path = "/repos/" ++ details.owner ++ "/" ++ details.repo ++ "/contents/logs/" ++ String.fromInt (Time.posixToMillis log.timestamp) ++ ".json"
                 , body =
                     [ ( "message", Json.Encode.string "Log edit" )
@@ -220,11 +220,34 @@ updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( Bac
 updateFromFrontend sessionId _ msg model =
     case msg of
         TB_LoadLogs details ->
+            let
+                owner =
+                    case details of
+                        StorageWrite writeDetails ->
+                            writeDetails.owner
+
+                        StorageRead readDetails ->
+                            readDetails.owner
+
+                repo =
+                    case details of
+                        StorageWrite writeDetails ->
+                            writeDetails.repo
+
+                        StorageRead readDetails ->
+                            readDetails.repo
+            in
             ( model
             , githubRequestTask
                 { method = "GET"
-                , token = details.token
-                , path = "/repos/" ++ details.owner ++ "/" ++ details.repo ++ "/contents/logs"
+                , token =
+                    case details of
+                        StorageWrite writeDetails ->
+                            Just writeDetails.token
+
+                        StorageRead _ ->
+                            Nothing
+                , path = "/repos/" ++ owner ++ "/" ++ repo ++ "/contents/logs"
                 , body = Http.emptyBody
                 , resolver =
                     Http.stringResolver
@@ -300,10 +323,10 @@ updateFromFrontend sessionId _ msg model =
                                     Http.task
                                         { method = "GET"
                                         , headers =
-                                            [ Http.header "Accept" "application/vnd.github.object+json"
-                                            , Http.header "Authorization" ("Bearer " ++ details.token)
-                                            , Http.header "X-GitHub-Api-Version" "2022-11-28"
-                                            ]
+                                            List.filterMap identity
+                                                [ Just <| Http.header "Accept" "application/vnd.github.object+json"
+                                                , Just <| Http.header "X-GitHub-Api-Version" "2022-11-28"
+                                                ]
                                         , url =
                                             let
                                                 proxy =
@@ -369,7 +392,7 @@ updateFromFrontend sessionId _ msg model =
                 |> Task.perform (CreateNewLog sessionId details isFirstLog log)
             )
 
-        TB_LoadMoreLogs details logsToLoad ->
+        TB_LoadMoreLogs logsToLoad ->
             ( model
             , logsToLoad
                 |> List.map
@@ -377,10 +400,10 @@ updateFromFrontend sessionId _ msg model =
                         Http.task
                             { method = "GET"
                             , headers =
-                                [ Http.header "Accept" "application/vnd.github.object+json"
-                                , Http.header "Authorization" ("Bearer " ++ details.token)
-                                , Http.header "X-GitHub-Api-Version" "2022-11-28"
-                                ]
+                                List.filterMap identity
+                                    [ Just <| Http.header "Accept" "application/vnd.github.object+json"
+                                    , Just <| Http.header "X-GitHub-Api-Version" "2022-11-28"
+                                    ]
                             , url =
                                 let
                                     proxy =
@@ -469,17 +492,13 @@ githubRequest :
     , expect : Http.Expect BackendMsg
     , method : String
     , path : String
-    , token : String
+    , token : Maybe String
     }
     -> Cmd BackendMsg
 githubRequest options =
     Http.request
         { method = options.method
-        , headers =
-            [ Http.header "Accept" "application/vnd.github+json"
-            , Http.header "Authorization" ("Bearer " ++ options.token)
-            , Http.header "X-GitHub-Api-Version" "2022-11-28"
-            ]
+        , headers = toHeaders options.token
         , url =
             let
                 proxy =
@@ -503,17 +522,13 @@ githubRequestTask :
     , resolver : Http.Resolver Http.Error a
     , method : String
     , path : String
-    , token : String
+    , token : Maybe String
     }
     -> Task Http.Error a
 githubRequestTask options =
     Http.task
         { method = options.method
-        , headers =
-            [ Http.header "Accept" "application/vnd.github+json"
-            , Http.header "Authorization" ("Bearer " ++ options.token)
-            , Http.header "X-GitHub-Api-Version" "2022-11-28"
-            ]
+        , headers = toHeaders options.token
         , url =
             let
                 proxy =
@@ -529,3 +544,17 @@ githubRequestTask options =
         , resolver = options.resolver
         , timeout = Nothing
         }
+
+
+toHeaders : Maybe String -> List Http.Header
+toHeaders possibleToken =
+    List.filterMap identity
+        [ Just <| Http.header "Accept" "application/vnd.github+json"
+        , case possibleToken of
+            Just token ->
+                Just <| Http.header "Authorization" ("Bearer " ++ token)
+
+            Nothing ->
+                Nothing
+        , Just <| Http.header "X-GitHub-Api-Version" "2022-11-28"
+        ]
