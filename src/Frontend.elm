@@ -9,6 +9,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Html.Keyed
+import Html.Lazy
 import Json.Decode
 import Json.Encode
 import Lamdera
@@ -1262,6 +1263,13 @@ loaderSimple =
 
 viewLog : EditableLogList -> ( String, Html FrontendMsg )
 viewLog log =
+    ( log.timestamp |> Time.posixToMillis |> String.fromInt
+    , Html.Lazy.lazy viewLogForm log
+    )
+
+
+viewLogForm : EditableLogList -> Html FrontendMsg
+viewLogForm log =
     let
         currentVal : Modifiable -> String
         currentVal modifiable =
@@ -1272,8 +1280,7 @@ viewLog log =
                 Modified { modified } ->
                     modified
     in
-    ( log.timestamp |> Time.posixToMillis |> String.fromInt
-    , Html.form
+    Html.form
         [ Css.previousLog
         , Html.Events.onSubmit (SubmitExistingChange log.timestamp)
         ]
@@ -1311,7 +1318,6 @@ viewLog log =
                             Html.text ""
                     ]
         ]
-    )
 
 
 modal : { isOpen : Bool, onClose : msg } -> List (Html.Attribute msg) -> List (Html msg) -> Html msg
